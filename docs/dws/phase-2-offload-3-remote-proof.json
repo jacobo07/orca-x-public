@@ -1,0 +1,14 @@
+[
+  {
+    "leg": "test",
+    "verdict": "UNJUDGED",
+    "reason": "no LEG-START childPid/startUtc to bind the capture to"
+  },
+  {
+    "leg": "build",
+    "verdict": "PASS",
+    "firstSeenUtc": "2026-09-30T01:05:35Z",
+    "lastSeenUtc": "2026-09-30T01:05:35Z",
+    "peakRssMb": 696.4140625
+  }
+]

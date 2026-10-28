@@ -1354,7 +1354,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite = assertSendPreconditions
+      // Why: a phone can take the floor between chunks of a long desktop send, so the lock is
+      // rechecked before every chunk, not only before the first.
+      const assertInputUnlocked = async (ptyId: string): Promise<void> => {
+        if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+          throw new Error('terminal_guard_not_writable')
+        }
+      }
+      const beforeWrite = assertSendPreconditions ?? assertInputUnlocked
       const useSettledAgentPrompt =
         params.agentPrompt === true &&
         hasText &&
@@ -1617,6 +1624,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         throw new Error('no_connected_pty')
       }
       return { restored: await runtime.reclaimTerminalForDesktop(leaf.ptyId) }
+    }
+  }),
+  defineMethod({
+    name: 'terminal.reclaimIfPhoneIdle',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => {
+      // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY (#7718).
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+      if (!leaf?.ptyId) {
+        throw new Error('no_connected_pty')
+      }
+      return await runtime.reclaimTerminalForDesktopIfPhoneIdle(leaf.ptyId)
     }
   }),
   defineMethod({

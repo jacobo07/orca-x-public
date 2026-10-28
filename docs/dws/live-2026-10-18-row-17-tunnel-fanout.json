@@ -1,0 +1,116 @@
+{
+  "verdict": "MEASURED",
+  "rung": "fan-out",
+  "headSha": "79f54d64af040e9a4327ca3bd9b645b6cfcda478",
+  "runtimeIdMatchesServe": true,
+  "deployed": {
+    "sha": "3266e1a41790ab356def108aca96895e1e921279",
+    "svcCheckout": "/home/orca-svc/dws-p2/3266e1a",
+    "boundEndpoint": "ws://127.0.0.1:6791",
+    "artifactSha256Laptop": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "artifactSha256Gex44": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "deployedUtc": "2026-09-30T04:59:04.7933937Z"
+  },
+  "utc": {
+    "start": "2026-10-18T16:26:41.2320710Z",
+    "end": "2026-10-18T16:28:25.9419103Z"
+  },
+  "product": {
+    "memoryAvailableBytes": 59431841792,
+    "vramFreeBytes": 3103784960,
+    "diskAvailableBytes": 137770090496,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ],
+    "diskFilesystemPath": "/",
+    "statuses": {
+      "memory": "measured",
+      "disk": "measured",
+      "vram": "measured",
+      "resident_model": "measured"
+    },
+    "memberAddress": "runtime:fe2b153a-00b6-426a-95a5-f571793d3a23",
+    "observedAt": 1792340899694
+  },
+  "control": {
+    "valid": true,
+    "memoryAvailableBytes": 59479773184,
+    "vramFreeBytes": 3137339392,
+    "diskAvailableBytes": 137781329920,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ]
+  },
+  "comparison": {
+    "memory": {
+      "verdict": "MATCH",
+      "delta": 47931392,
+      "tolerance": 5947977318.400001
+    },
+    "vram": {
+      "verdict": "MATCH",
+      "delta": 33554432,
+      "tolerance": 268435456
+    },
+    "disk": {
+      "verdict": "MATCH",
+      "delta": 11239424,
+      "tolerance": 1073741824
+    },
+    "resident_model": {
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
+    }
+  },
+  "planeTags": {
+    "memory": "GEX44-PROVEN",
+    "vram": "GEX44-PROVEN",
+    "disk": "GEX44-PROVEN",
+    "resident_model": "GEX44-PROVEN"
+  },
+  "notes": [
+    "judged against control-before; product reading: fan-out"
+  ],
+  "controlStability": {
+    "memory": {
+      "verdict": "MATCH",
+      "delta": 37715968,
+      "tolerance": 5944205721.6
+    },
+    "vram": {
+      "verdict": "MATCH",
+      "delta": 33554432,
+      "tolerance": 268435456
+    },
+    "disk": {
+      "verdict": "MATCH",
+      "delta": 12451840,
+      "tolerance": 1073741824
+    },
+    "resident_model": {
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
+    }
+  },
+  "probePort": 8081,
+  "fanOut": "an isolated laptop Orca paired over the ssh -L tunnel answered fleet.nodeManifests through callEnvironment",
+  "teardown": {
+    "tunnelSshProcesses": 0,
+    "tunnelPortListeners": 0,
+    "laptopLocalRuntimeProcesses": 0,
+    "leftoverE2eUserData": [],
+    "serveActive": "active",
+    "notes": [
+      "TUNNEL_STOPPED pid=16576"
+    ]
+  },
+  "serveMainPid": {
+    "before": "3357463",
+    "after": "3357463"
+  },
+  "laptopFreeMbAtStart": 9781.8,
+  "diskFact": {
+    "availableBytes": 137781329920,
+    "percentUsed": 92
+  }
+}

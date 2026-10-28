@@ -5,6 +5,10 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import {
+  sanitizeGitRootIdentity,
+  sanitizeGitRootIdentityNoneReason
+} from '../../../shared/git-root-identity'
+import {
   sanitizeForkSyncMode,
   sanitizeGitRemoteIdentity,
   sanitizeRepoProjectHostSetupMethod,
@@ -31,6 +35,8 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     repoIcon: rawRepoIcon,
     upstream: rawUpstream,
     gitRemoteIdentity: rawGitRemoteIdentity,
+    gitRootIdentity: rawGitRootIdentity,
+    gitRootIdentityNoneReason: rawGitRootIdentityNoneReason,
     sourceControlAi: rawSourceControlAi,
     projectHostSetupMethod: rawProjectHostSetupMethod,
     forkSyncMode: rawForkSyncMode,
@@ -41,6 +47,12 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
   const upstream = sanitizeRepoUpstream(rawUpstream)
   const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
+  // Why: an unknown field already survives the rest-spread; destructuring here is what keeps a malformed value out.
+  const gitRootIdentity = sanitizeGitRootIdentity(rawGitRootIdentity)
+  const gitRootIdentityNoneReason =
+    gitRootIdentity === null
+      ? sanitizeGitRootIdentityNoneReason(rawGitRootIdentityNoneReason)
+      : undefined
   const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
   const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
   const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
@@ -60,6 +72,8 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(repoIcon !== undefined ? { repoIcon } : {}),
     ...(upstream !== undefined ? { upstream } : {}),
     ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
+    ...(gitRootIdentity !== undefined ? { gitRootIdentity } : {}),
+    ...(gitRootIdentityNoneReason !== undefined ? { gitRootIdentityNoneReason } : {}),
     ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
     ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
     ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),

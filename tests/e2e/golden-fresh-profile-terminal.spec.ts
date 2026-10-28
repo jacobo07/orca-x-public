@@ -42,7 +42,8 @@ async function stubFolderPicker(
 }
 
 async function selectCodexAndSkipToProject(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ }).first()
+  // Why: the codex agent is offered as ChatGPT, a brand label that is never translated.
+  const codexButton = page.getByRole('button', { name: /^ChatGPT\s/ }).first()
   if (!(await codexButton.isVisible())) {
     await page.getByText(/Show \d+ more agents/).click()
   }

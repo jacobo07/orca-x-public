@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { SshHostKeyTrustRequestEvent } from '../../../../preload/api/ssh-api'
 import type {
   SshConnectionState,
   PortForwardEntry,
@@ -11,6 +12,7 @@ import {
   sshConnectionStatesEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
+import { shouldRetainRowsOnConnectionLoss } from './agent-status-reconnect-retention'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -45,6 +47,8 @@ export type SshSlice = {
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
+  /** Pending first-contact host-key confirmations; a fingerprint question, never a secret. */
+  sshHostKeyTrustQueue: SshHostKeyTrustRequestEvent[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
    * components like the file explorer to re-trigger data loads that failed
    * before the connection was established. */
@@ -67,6 +71,8 @@ export type SshSlice = {
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
+  enqueueSshHostKeyTrustRequest: (req: SshHostKeyTrustRequestEvent) => void
+  removeSshHostKeyTrustRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
   clearPortForwards: (targetId: string) => void
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
@@ -82,7 +88,7 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
   targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   removedSshTargetLabels: new Map(),
@@ -90,17 +96,23 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
+  sshHostKeyTrustQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
   detectedPortsByConnection: {},
 
-  setSshConnectionState: (targetId, state) =>
+  setSshConnectionState: (targetId, state) => {
+    // Why: rows kept unverified through a transient loss must go once the loss turns permanent.
+    let endsRetainedLoss = false
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
+      endsRetainedLoss =
+        !shouldRetainRowsOnConnectionLoss(state.status) &&
+        targetId in s.transientClearedAgentStatusConnectionIds
       advanceLocalSshTargetConnectionGeneration(targetId)
       next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
@@ -116,7 +128,11 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
           : s.sshConnectedGeneration,
         transientClearedAgentStatusConnectionIds: blockedConnections
       }
-    }),
+    })
+    if (endsRetainedLoss) {
+      get().clearTransientAgentStatuses(targetId, Date.now())
+    }
+  },
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setRemovedSshTargetLabels: (labels) =>
@@ -159,6 +175,12 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   removeSshCredentialRequest: (requestId) =>
     set((s) => ({
       sshCredentialQueue: s.sshCredentialQueue.filter((req) => req.requestId !== requestId)
+    })),
+  enqueueSshHostKeyTrustRequest: (req) =>
+    set((s) => ({ sshHostKeyTrustQueue: [...s.sshHostKeyTrustQueue, req] })),
+  removeSshHostKeyTrustRequest: (requestId) =>
+    set((s) => ({
+      sshHostKeyTrustQueue: s.sshHostKeyTrustQueue.filter((req) => req.requestId !== requestId)
     })),
 
   setPortForwards: (targetId, forwards) =>

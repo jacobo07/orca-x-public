@@ -1,0 +1,844 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { FleetObservation } from '../../../../shared/fleet-placement-view'
+import type { FleetPlacementMember } from '../../../../shared/fleet-placement'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import {
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import type { OrchestrationDb } from '../../orchestration/db'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { RpcContext } from '../core'
+import { RpcDispatcher } from '../dispatcher'
+import { ORCHESTRATION_METHODS } from './orchestration'
+import { DEFAULT_FLEET_SAMPLE_MAX_AGE_MS } from './fleet'
+import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
+
+const observation = vi.hoisted(() => ({ current: null as Promise<unknown> | null }))
+vi.mock('../../../fleet/fleet-observation-slot', () => ({
+  readFleetObservation: () => observation.current,
+  installFleetObservation: () => {}
+}))
+
+function member(
+  address: FleetPlacementMember['address'],
+  fingerprint: string,
+  capabilities: string[] | null,
+  availableMemory: number
+): FleetPlacementMember {
+  return {
+    address,
+    label: address,
+    identity: { state: 'keyed', fingerprint },
+    facts: { runtimeId: null, platform: 'linux', capabilities, protocol: 'not-applicable' },
+    sample: {
+      outcome: 'measured',
+      runtimeId: null,
+      startedAt: 1_000,
+      totalMemory: availableMemory,
+      availableMemory,
+      availableMemorySource: 'unknown',
+      processSweep: 'unknown'
+    }
+  }
+}
+
+const FED = [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY, ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY]
+
+function fleet(): FleetObservation {
+  return {
+    observedAt: 1_000,
+    completedAt: 1_000,
+    members: [
+      member('local', 'fp-win', null, 4),
+      member('ssh:gex', 'ssh-hostkey:x', null, 64),
+      member('runtime:env-gex', 'fp-gex', FED, 32)
+    ],
+    coverage: { runtimeEnvironments: 1, sshTargets: 'enumerated' }
+  }
+}
+
+async function codeOf(run: Promise<unknown>): Promise<string | undefined> {
+  try {
+    await run
+    return undefined
+  } catch (error) {
+    return (error as { code?: string }).code
+  }
+}
+
+describe('cross-host mission dispatch', () => {
+  const h = createOrchestrationRpcHarness()
+  let db: OrchestrationDb
+  let runtime: OrcaRuntimeService
+  let ctx: RpcContext
+
+  function setup(): void {
+    ;({ db, runtime, ctx } = h.setup(true))
+    observation.current = Promise.resolve(fleet())
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockImplementation((selector) => ({
+      environmentId: selector === 'gex' ? 'env-gex' : `env-${selector}`,
+      name: selector,
+      peerFingerprint: 'fp-gex'
+    }))
+  }
+
+  afterEach(() => {
+    observation.current = null
+    h.cleanup()
+  })
+
+  it('places one job on this host and one on the runtime, never the SSH relay', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    const b = db.createTask({ spec: 'job b' })
+    const plan = (await h.call(
+      'orchestration.missionPlace',
+      { from: 'term_coord', tasks: [a.id, b.id] },
+      ctx
+    )) as {
+      hostCount: number
+      placements: { address: string }[]
+      notDispatchable: { address: string }[]
+    }
+    expect(plan.hostCount).toBe(2)
+    expect(plan.placements.map((p) => p.address).sort()).toEqual(['local', 'runtime:env-gex'])
+    expect(plan.notDispatchable.map((m) => m.address)).toEqual(['ssh:gex'])
+    expect(db.listRunTaskPlacements(a.run_id)).toHaveLength(2)
+  })
+
+  describe('resource requirement', () => {
+    const GB = 1024 ** 3
+    type PlaceResult = {
+      placements: { taskId: string; address: string; fingerprint: string }[]
+      unplaced: { jobId: string }[]
+    }
+
+    // Why: three dispatchable hosts; the 6 GiB runtime is third in the memory ranking, so only a requirement keeps it empty.
+    function useResourceFleet(): void {
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          member('local', 'fp-win', null, 16 * GB),
+          member('runtime:env-big', 'fp-big', FED, 24 * GB),
+          member('runtime:env-small', 'fp-small', FED, 6 * GB)
+        ]
+      })
+    }
+
+    it('places a task needing 8 GiB on a host that has it and persists that host', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'heavy' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [a.id],
+          requirement: { memory: { minAvailableBytes: 8 * GB } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(db.getTaskPlacement(a.id)).toMatchObject({
+        fingerprint: 'fp-big',
+        address: 'runtime:env-big',
+        label: 'runtime:env-big'
+      })
+    })
+
+    it('keeps every heavy task off the 6 GiB host even when it must double up', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: ids,
+          requirement: { memory: { minAvailableBytes: 8 * GB } }
+        },
+        ctx
+      )
+      const rows = ids.map((id) => db.getTaskPlacement(id))
+      expect(rows.every((row) => row !== undefined)).toBe(true)
+      expect(rows.map((row) => row?.fingerprint)).not.toContain('fp-small')
+      expect(new Set(rows.map((row) => row?.fingerprint))).toEqual(new Set(['fp-big', 'fp-win']))
+    })
+
+    it('control: without a requirement the third task lands on the 6 GiB host', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: ids },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(ids.map((id) => db.getTaskPlacement(id)?.fingerprint).sort()).toEqual([
+        'fp-big',
+        'fp-small',
+        'fp-win'
+      ])
+    })
+
+    function withGpu(base: FleetPlacementMember, freeBytes: number): FleetPlacementMember {
+      return {
+        ...base,
+        nodeResources: {
+          startedAt: 1_000,
+          runtimeId: null,
+          disk: { outcome: 'unknown', reason: 'not-attempted' },
+          gpu: { outcome: 'measured', gpus: [{ name: 'gpu0', totalBytes: 24 * GB, freeBytes }] },
+          models: { outcome: 'unknown', reason: 'no-probe-configured' }
+        }
+      }
+    }
+
+    it('a per-task requirement replaces the global one family by family', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      const light = ids[2]
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: ids,
+          requirement: { memory: { minAvailableBytes: 8 * GB } },
+          taskRequirements: { [light]: { memory: { minAvailableBytes: 1 * GB } } }
+        },
+        ctx
+      )) as { rejectedByJob: { jobId: string; rejected: { fingerprint: string }[] }[] }
+      // Why: the rejection lists are order independent, unlike where load spreading puts each task.
+      const refusedBy = (id: string) =>
+        plan.rejectedByJob.find((entry) => entry.jobId === id)?.rejected.map((r) => r.fingerprint)
+      expect(refusedBy(light)).toEqual([])
+      expect(refusedBy(ids[0])).toEqual(['fp-small'])
+      expect(refusedBy(ids[1])).toEqual(['fp-small'])
+      for (const id of ids.slice(0, 2)) {
+        expect(db.getTaskPlacement(id)?.fingerprint).not.toBe('fp-small')
+      }
+    })
+
+    it('places a VRAM task only on the host with measured sufficient VRAM and a light task elsewhere', async () => {
+      setup()
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          withGpu(member('local', 'fp-win', null, 16 * GB), 16 * GB),
+          member('runtime:env-big', 'fp-big', FED, 24 * GB),
+          withGpu(member('runtime:env-small', 'fp-small', FED, 6 * GB), 4 * GB)
+        ]
+      })
+      const heavy = db.createTask({ spec: 'heavy' })
+      const light = db.createTask({ spec: 'light' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [heavy.id, light.id],
+          taskRequirements: { [heavy.id]: { vram: { minFreeBytes: 8 * GB } } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(db.getTaskPlacement(heavy.id)?.fingerprint).toBe('fp-win')
+      expect(db.getTaskPlacement(light.id)?.fingerprint).toBe('fp-big')
+    })
+
+    it('leaves a VRAM task unplaced on unknown-VRAM hosts and shows why per job', async () => {
+      setup()
+      useResourceFleet()
+      const heavy = db.createTask({ spec: 'heavy' })
+      const light = db.createTask({ spec: 'light' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [heavy.id, light.id],
+          taskRequirements: { [heavy.id]: { vram: { minFreeBytes: 1 } } }
+        },
+        ctx
+      )) as PlaceResult & {
+        rejectedByJob: { jobId: string; rejected: { reasons: unknown[] }[] }[]
+      }
+      expect(plan.unplaced).toEqual([{ jobId: heavy.id, reason: 'no-eligible-host' }])
+      expect(db.getTaskPlacement(heavy.id)).toBeUndefined()
+      expect(db.getTaskPlacement(light.id)).toBeDefined()
+      const detail = plan.rejectedByJob.find((entry) => entry.jobId === heavy.id)
+      expect(detail?.rejected).toHaveLength(3)
+      for (const host of detail?.rejected ?? []) {
+        expect(host.reasons).toEqual([
+          {
+            reason: 'resource-unknown',
+            family: 'vram',
+            cause: 'unmeasured',
+            detail: 'not-attempted'
+          }
+        ])
+      }
+      expect(plan.rejectedByJob.find((entry) => entry.jobId === light.id)?.rejected).toEqual([])
+    })
+
+    it('rejects a taskRequirements key that is not one of the tasks and places nothing', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      const other = db.createTask({ spec: 'job other' })
+      await expect(
+        h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            taskRequirements: { [other.id]: { memory: { minAvailableBytes: 1 } } }
+          },
+          ctx
+        )
+      ).rejects.toThrow(/not one of the tasks/)
+      expect(db.getTaskPlacement(a.id)).toBeUndefined()
+      expect(db.getTaskPlacement(other.id)).toBeUndefined()
+      // control: the same entry for a listed task is accepted
+      await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [a.id],
+          taskRequirements: { [a.id]: { memory: { minAvailableBytes: 1 } } }
+        },
+        ctx
+      )
+      expect(db.getTaskPlacement(a.id)).toBeDefined()
+    })
+
+    it('stays strict: an unknown requirement key or family key fails, nothing is placed', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      for (const requirement of [
+        { cpu: { cores: 4 } },
+        { memory: { minAvailableBytes: 1, x: 1 } }
+      ]) {
+        await expect(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            ctx
+          )
+        ).rejects.toThrow(/Unrecognized key/)
+      }
+      expect(db.getTaskPlacement(a.id)).toBeUndefined()
+    })
+
+    it('still refuses a remote caller and a task that already left pending/ready', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      const requirement = { memory: { minAvailableBytes: 8 * GB } }
+      expect(
+        await codeOf(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            { ...ctx, pairedDeviceId: 'phone' }
+          )
+        )
+      ).toBe('remote_caller_refused')
+      db.updateTaskStatus(a.id, 'completed', 'done')
+      expect(
+        await codeOf(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            ctx
+          )
+        )
+      ).toBe('task_not_placeable')
+    })
+  })
+
+  it('refuses a remote caller and an unbound coordinator', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    expect(
+      await codeOf(
+        h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          { ...ctx, pairedDeviceId: 'phone' }
+        )
+      )
+    ).toBe('remote_caller_refused')
+    expect(
+      await codeOf(h.call('orchestration.missionPlace', { from: 'term_other', tasks: [a.id] }, ctx))
+    ).toBe('consumer_fenced')
+    expect(db.getTaskPlacement(a.id)).toBeUndefined()
+  })
+
+  // Why: the dispatcher stamps a local caller fingerprint on every mutation; the live leg was refused by it.
+  it('admits the local socket through the real dispatcher and refuses a paired socket', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const request = (id: string) => ({
+      id,
+      authToken: 'test-auth-token',
+      method: 'orchestration.missionPlace',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: `place-${id}`,
+      params: { from: 'term_coord', tasks: [a.id] }
+    })
+    const replies: string[] = []
+    await dispatcher.dispatchStreaming(request('paired'), (r) => replies.push(r), {
+      authenticatedCallerFingerprint: 'fp-phone',
+      clientId: 'device-token',
+      pairedDeviceId: 'phone',
+      clientKind: 'runtime'
+    })
+    expect(JSON.parse(replies[0]).error).toMatchObject({ code: 'remote_caller_refused' })
+    // A fingerprint that is not this runtime's own still marks a remote caller.
+    expect(
+      await codeOf(
+        h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          { ...ctx, authenticatedCallerFingerprint: 'fp-foreign' }
+        )
+      )
+    ).toBe('remote_caller_refused')
+    const local = await dispatcher.dispatch(request('local'))
+    expect(local.ok ? undefined : local.error).toBeUndefined()
+    expect(db.getTaskPlacement(a.id)).toBeDefined()
+  })
+
+  it('workerStart refuses a placed task started on the wrong host before any dispatch row', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    const b = db.createTask({ spec: 'job b' })
+    db.placeMissionTasks(a.run_id, [
+      {
+        taskId: a.id,
+        hostKey: 'fingerprint:fp-win',
+        fingerprint: 'fp-win',
+        address: 'local',
+        label: 'laptop'
+      },
+      {
+        taskId: b.id,
+        hostKey: 'fingerprint:fp-gex',
+        fingerprint: 'fp-gex',
+        address: 'runtime:env-gex',
+        label: 'gex44'
+      }
+    ])
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+    expect(
+      await codeOf(
+        h.call('orchestration.workerStart', { task: a.id, from: 'term_coord', on: 'gex' }, ctx)
+      )
+    ).toBe('placement_mismatch')
+    expect(
+      await codeOf(
+        h.call('orchestration.workerStart', { task: b.id, from: 'term_coord', agent: 'codex' }, ctx)
+      )
+    ).toBe('placement_mismatch')
+    expect(
+      await codeOf(
+        h.call('orchestration.workerStart', { task: b.id, from: 'term_coord', on: 'other' }, ctx)
+      )
+    ).toBe('placement_mismatch')
+    expect(db.getDispatchContext(a.id)).toBeUndefined()
+    expect(db.getDispatchContext(b.id)).toBeUndefined()
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('workerStart lets the placed remote host through to the federation start', async () => {
+    setup()
+    const b = db.createTask({ spec: 'job b' })
+    db.placeMissionTasks(b.run_id, [
+      {
+        taskId: b.id,
+        hostKey: 'fingerprint:fp-gex',
+        fingerprint: 'fp-gex',
+        address: 'runtime:env-gex',
+        label: 'gex44'
+      }
+    ])
+    // Why: past the placement check, federation's own guard refuses a call with no retry identity.
+    expect(
+      await codeOf(
+        h.call(
+          'orchestration.workerStart',
+          { task: b.id, from: 'term_coord', on: 'gex', worktree: 'new-top-level' },
+          ctx
+        )
+      )
+    ).toBe('invalid_argument')
+  })
+
+  it('missionPlace refuses a task that already left pending/ready', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    db.updateTaskStatus(a.id, 'completed', 'done before any placement')
+    expect(
+      await codeOf(h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx))
+    ).toBe('task_not_placeable')
+    expect(db.getTaskPlacement(a.id)).toBeUndefined()
+  })
+
+  it('missionResults never credits a placed host whose dispatch did not run there', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    const b = db.createTask({ spec: 'job b' })
+    db.placeMissionTasks(a.run_id, [
+      {
+        taskId: a.id,
+        hostKey: 'fingerprint:fp-win',
+        fingerprint: 'fp-win',
+        address: 'local',
+        label: 'laptop'
+      },
+      {
+        taskId: b.id,
+        hostKey: 'fingerprint:fp-gex',
+        fingerprint: 'fp-gex',
+        address: 'runtime:env-gex',
+        label: 'gex44'
+      }
+    ])
+    db.createDispatchContext(a.id, 'term_worker_a')
+    db.updateTaskStatus(a.id, 'completed', 'a done')
+    // Why: b completes with no dispatch at all, the way a manual task-update would.
+    db.updateTaskStatus(b.id, 'completed', 'b done')
+    const r = (await h.call('orchestration.missionResults', { run: a.run_id }, ctx)) as {
+      crossHost: boolean
+      completed: number
+      pending: string[]
+      jobs: { jobId: string; ranOnPlacement: boolean; completedAt: string | null }[]
+    }
+    expect(r.completed).toBe(1)
+    expect(r.crossHost).toBe(false)
+    expect(r.pending).toEqual([b.id])
+    expect(r.jobs.find((j) => j.jobId === a.id)?.ranOnPlacement).toBe(true)
+    expect(r.jobs.find((j) => j.jobId === b.id)?.ranOnPlacement).toBe(false)
+  })
+
+  describe('hydrated host preference', () => {
+    const GB = 1024 ** 3
+    type PlaceResult = {
+      placements: { taskId: string; address: string; fingerprint: string }[]
+      unplaced: { jobId: string }[]
+      locality?: { taskId: string; hostKey: string; hydrated: boolean }[]
+    }
+
+    function setupRecord(
+      projectId: string,
+      hostId: ProjectHostSetup['hostId'],
+      setupState: ProjectHostSetup['setupState'] = 'ready',
+      updatedAt = 0
+    ): ProjectHostSetup {
+      return {
+        id: `${projectId}@${hostId}`,
+        projectId,
+        hostId,
+        repoId: `${projectId}@${hostId}`,
+        path: '/work',
+        displayName: projectId,
+        setupState,
+        setupMethod: 'legacy-repo',
+        createdAt: 0,
+        updatedAt
+      }
+    }
+
+    // Why: A is roomier than B, so only a hydration preference can send a task to B.
+    function useTwoRuntimes(setups: ProjectHostSetup[]): void {
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          member('runtime:env-a', 'fp-a', FED, 24 * GB),
+          member('runtime:env-b', 'fp-b', FED, 8 * GB)
+        ]
+      })
+      vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue(setups)
+    }
+
+    const subjectOf = (projectId: string) => ({ projectId, worktreePath: null, revision: null })
+
+    it('places a task on the smaller host that holds its project and records it', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: [a.id] },
+        ctx
+      )) as PlaceResult
+      expect(db.getTaskPlacement(a.id)).toMatchObject({
+        fingerprint: 'fp-b',
+        address: 'runtime:env-b',
+        label: 'runtime:env-b'
+      })
+      expect(plan.locality).toEqual([{ taskId: a.id, hostKey: 'fingerprint:fp-b', hydrated: true }])
+    })
+
+    it('control: a task of another project goes to the roomier host and is not hydrated', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('Q') })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: [a.id] },
+        ctx
+      )) as PlaceResult
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+      expect(plan.locality).toEqual([
+        { taskId: a.id, hostKey: 'fingerprint:fp-a', hydrated: false }
+      ])
+    })
+
+    it('control: a setup that is not ready changes nothing, whatever the state', async () => {
+      for (const state of ['not-set-up', 'setting-up', 'error', 'unsupported'] as const) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', state)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        expect(db.getTaskPlacement(a.id)?.fingerprint, state).toBe('fp-a')
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+    })
+
+    it('control: a task with no subject goes to the roomier host', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job' })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+    })
+
+    describe('eligibility wins over hydration', () => {
+      function useFleet(members: FleetPlacementMember[], setups: ProjectHostSetup[]): void {
+        observation.current = Promise.resolve({ ...fleet(), members })
+        vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue(setups)
+      }
+
+      it('control: the hydrated host is chosen when it is eligible for the requirement', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 24 * GB),
+            member('runtime:env-b', 'fp-b', FED, 8 * GB)
+          ],
+          [setupRecord('P', 'runtime:env-b')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            requirement: { memory: { minAvailableBytes: 4 * GB } }
+          },
+          ctx
+        )
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-b')
+      })
+
+      it('does not place on a hydrated host that lacks the memory the task needs', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 24 * GB),
+            member('runtime:env-b', 'fp-b', FED, 8 * GB)
+          ],
+          [setupRecord('P', 'runtime:env-b')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            requirement: { memory: { minAvailableBytes: 16 * GB } }
+          },
+          ctx
+        )) as PlaceResult
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        expect(plan.locality?.[0].hydrated).toBe(false)
+      })
+
+      it('does not place on a hydrated host whose sample is stale', async () => {
+        setup()
+        const now = 1_000 + DEFAULT_FLEET_SAMPLE_MAX_AGE_MS * 4
+        const staleHost = member('runtime:env-b', 'fp-b', FED, 8 * GB)
+        const freshHost = member('runtime:env-a', 'fp-a', FED, 24 * GB)
+        if (staleHost.sample.outcome !== 'measured' || freshHost.sample.outcome !== 'measured') {
+          throw new Error('fixture must be measured')
+        }
+        freshHost.sample.startedAt = now
+        observation.current = Promise.resolve({
+          ...fleet(),
+          completedAt: now,
+          members: [freshHost, staleHost]
+        })
+        vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue([
+          setupRecord('P', 'runtime:env-b')
+        ])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          ctx
+        )) as PlaceResult & { rejected: { fingerprint: string; reasons: { reason: string }[] }[] }
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        const refused = plan.rejected.find((r) => r.fingerprint === 'fp-b')
+        expect(refused?.reasons.map((r) => r.reason)).toEqual(['sample-stale'])
+      })
+
+      it('never places on a hydrated SSH relay', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 8 * GB),
+            member('ssh:relay', 'ssh-hostkey:r', FED, 64 * GB)
+          ],
+          [setupRecord('P', 'ssh:relay')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          ctx
+        )) as PlaceResult & { notDispatchable: { address: string }[] }
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        expect(plan.notDispatchable.map((m) => m.address)).toEqual(['ssh:relay'])
+      })
+    })
+
+    describe('subject handling', () => {
+      function writeRawSubject(taskId: string, raw: string | null): void {
+        const raw_db = (
+          db as unknown as { db: { prepare: (sql: string) => { run: (...a: unknown[]) => void } } }
+        ).db
+        raw_db.prepare('UPDATE tasks SET subject = ? WHERE id = ?').run(raw, taskId)
+      }
+
+      it('places a task whose subject text is unreadable, without the preference', async () => {
+        for (const raw of ['not json at all', '{"worktreePath":"/x"}', '{"projectId":""}', '[]']) {
+          setup()
+          useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+          const a = db.createTask({ spec: 'job' })
+          writeRawSubject(a.id, raw)
+          const plan = (await h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id] },
+            ctx
+          )) as PlaceResult
+          expect(db.getTaskPlacement(a.id)?.fingerprint, raw).toBe('fp-a')
+          expect(plan.unplaced).toEqual([])
+          h.cleanup()
+          vi.restoreAllMocks()
+        }
+      })
+
+      it('resolves a git subject and a folder-workspace subject alike by project id', async () => {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+        const git = db.createTask({
+          spec: 'git',
+          subject: { projectId: 'P', worktreePath: '/work/tree', revision: 'a'.repeat(40) }
+        })
+        const folder = db.createTask({
+          spec: 'folder',
+          subject: { projectId: 'P', worktreePath: null, revision: null }
+        })
+        await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [git.id, folder.id] },
+          ctx
+        )
+        expect(db.getTaskPlacement(git.id)?.fingerprint).toBe('fp-b')
+        expect(db.getTaskPlacement(folder.id)?.fingerprint).toBe('fp-b')
+      })
+    })
+
+    it('does not read updatedAt: 0, 1 and the current time are hydrated alike', async () => {
+      for (const updatedAt of [0, 1, Date.now()]) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', 'ready', updatedAt)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        expect(db.getTaskPlacement(a.id)?.fingerprint, `updatedAt ${updatedAt}`).toBe('fp-b')
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+    })
+
+    it('gives the same placement for two setups that differ only in updatedAt', async () => {
+      const placed: (string | undefined)[] = []
+      for (const updatedAt of [0, 9_999_999_999_999]) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', 'ready', updatedAt)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        placed.push(db.getTaskPlacement(a.id)?.fingerprint)
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+      expect(placed).toEqual(['fp-b', 'fp-b'])
+    })
+
+    it('gives each placed task exactly one locality entry with exactly three keys', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const hydrated = db.createTask({ spec: 'h', subject: subjectOf('P') })
+      const plain = db.createTask({ spec: 'plain' })
+      const huge = db.createTask({ spec: 'huge' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [hydrated.id, plain.id, huge.id],
+          taskRequirements: { [huge.id]: { memory: { minAvailableBytes: 1000 * GB } } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced.map((u) => u.jobId)).toEqual([huge.id])
+      const entries = plan.locality ?? []
+      expect(entries.map((e) => e.taskId).sort()).toEqual([hydrated.id, plain.id].sort())
+      for (const entry of entries) {
+        expect(Object.keys(entry).sort()).toEqual(['hostKey', 'hydrated', 'taskId'])
+      }
+      const byTask = Object.fromEntries(entries.map((e) => [e.taskId, e]))
+      expect(byTask[hydrated.id]).toEqual({
+        taskId: hydrated.id,
+        hostKey: 'fingerprint:fp-b',
+        hydrated: true
+      })
+      expect(byTask[plain.id].hydrated).toBe(false)
+      expect(entries.some((e) => e.taskId === huge.id)).toBe(false)
+    })
+
+    it('prefers a different host per project when each project lives on a different host', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b'), setupRecord('Q', 'runtime:env-a')])
+      const p = db.createTask({ spec: 'p', subject: subjectOf('P') })
+      const q = db.createTask({ spec: 'q', subject: subjectOf('Q') })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [p.id, q.id] }, ctx)
+      expect(db.getTaskPlacement(p.id)?.fingerprint).toBe('fp-b')
+      expect(db.getTaskPlacement(q.id)?.fingerprint).toBe('fp-a')
+    })
+
+    it('control: a setup whose host is not a member goes unused', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-elsewhere')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+    })
+  })
+})

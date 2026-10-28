@@ -1,5 +1,5 @@
-import { requireNativeModule } from 'expo-modules-core'
+import { requireOptionalNativeModule } from 'expo-modules-core'
 
-// It loads the native module object from the JSI or falls back to
-// the bridge module (from NativeModulesProxy) if the remote debugger is on.
-export default requireNativeModule('ExpoTwoWayAudio')
+// Why: optional, not required — a binary built without this module must lose dictation, not crash
+// every route that imports it (requireNativeModule throws at import time).
+export default requireOptionalNativeModule('ExpoTwoWayAudio')

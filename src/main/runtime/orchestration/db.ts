@@ -12,6 +12,7 @@ import type {
   CoordinatorStatus,
   MessageRow,
   TaskRow,
+  TaskPlacementRow,
   DispatchContextRow,
   DecisionGateRow,
   CoordinatorRun,
@@ -135,6 +136,7 @@ export type {
   CoordinatorStatus,
   MessageRow,
   TaskRow,
+  TaskPlacementRow,
   DispatchContextRow,
   DecisionGateRow,
   CoordinatorRun,
@@ -323,10 +325,23 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task, v33 subject-bound decision gates.
+const TASK_PLACEMENTS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS task_placements (
+    task_id      TEXT PRIMARY KEY,
+    run_id       TEXT NOT NULL,
+    host_key     TEXT NOT NULL,
+    fingerprint  TEXT NOT NULL,
+    address      TEXT NOT NULL,
+    label        TEXT NOT NULL,
+    placed_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_task_placements_run ON task_placements(run_id);
+`
+
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task, v33 subject-bound decision gates, v34 task host placements.
 // Exported so a test can assert "this database is at the current schema" without restating the
 // number: four files hardcoded 28 and all of them broke on the v29 bump.
-export const SCHEMA_VERSION = 33
+export const SCHEMA_VERSION = 34
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -643,6 +658,8 @@ export class OrchestrationDb {
 
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
       CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+
+      ${TASK_PLACEMENTS_TABLE_SQL}
 
       CREATE TABLE IF NOT EXISTS dispatch_contexts (
         id                  TEXT PRIMARY KEY,
@@ -1158,6 +1175,9 @@ export class OrchestrationDb {
       }
       if (current < 33 && !this.hasColumn('decision_gates', 'decision')) {
         this.db.exec('ALTER TABLE decision_gates ADD COLUMN decision TEXT')
+      }
+      if (current < 34) {
+        this.db.exec(TASK_PLACEMENTS_TABLE_SQL)
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -4586,6 +4606,97 @@ export class OrchestrationDb {
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
+  }
+
+  // Why: a placement is the observable record of WHERE a job was sent; it authorizes nothing,
+  // dispatch still re-resolves identity, lease and state before acting.
+  recordTaskPlacement(params: {
+    taskId: string
+    hostKey: string
+    fingerprint: string
+    address: string
+    label: string
+  }): TaskPlacementRow {
+    const task = this.db.prepare('SELECT run_id FROM tasks WHERE id = ?').get(params.taskId) as
+      | { run_id: string }
+      | undefined
+    if (!task) {
+      throw new Error(`cannot place unknown task ${params.taskId}`)
+    }
+    this.db
+      .prepare(
+        `INSERT INTO task_placements (task_id, run_id, host_key, fingerprint, address, label)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(task_id) DO UPDATE SET host_key = excluded.host_key,
+           fingerprint = excluded.fingerprint, address = excluded.address,
+           label = excluded.label, placed_at = datetime('now')`
+      )
+      .run(params.taskId, task.run_id, params.hostKey, params.fingerprint, params.address, params.label)
+    return this.db
+      .prepare('SELECT * FROM task_placements WHERE task_id = ?')
+      .get(params.taskId) as TaskPlacementRow
+  }
+
+  getTaskPlacement(taskId: string): TaskPlacementRow | undefined {
+    return this.db.prepare('SELECT * FROM task_placements WHERE task_id = ?').get(taskId) as
+      | TaskPlacementRow
+      | undefined
+  }
+
+  /** All-or-nothing: a retry of the same plan keeps each row; a different host is refused, never overwritten. */
+  placeMissionTasks(
+    runId: string,
+    placements: readonly {
+      taskId: string
+      hostKey: string
+      fingerprint: string
+      address: string
+      label: string
+    }[]
+  ): TaskPlacementRow[] {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const rows = placements.map((p) => {
+        const task = this.db.prepare('SELECT run_id FROM tasks WHERE id = ?').get(p.taskId) as
+          | { run_id: string }
+          | undefined
+        if (!task || task.run_id !== runId) {
+          throw new OrchestrationError(
+            'task_not_found',
+            `Task ${p.taskId} was not found in Run ${runId}.`
+          )
+        }
+        const existing = this.getTaskPlacement(p.taskId)
+        if (existing) {
+          if (existing.host_key !== p.hostKey || existing.address !== p.address) {
+            throw new OrchestrationError(
+              'placement_conflict',
+              `Task ${p.taskId} is already placed on ${existing.label} (${existing.address}).`,
+              { taskId: p.taskId, placedAddress: existing.address, proposedAddress: p.address }
+            )
+          }
+          return existing
+        }
+        this.db
+          .prepare(
+            `INSERT INTO task_placements (task_id, run_id, host_key, fingerprint, address, label)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(p.taskId, runId, p.hostKey, p.fingerprint, p.address, p.label)
+        return this.getTaskPlacement(p.taskId) as TaskPlacementRow
+      })
+      this.db.exec('COMMIT')
+      return rows
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  listRunTaskPlacements(runId: string): TaskPlacementRow[] {
+    return this.db
+      .prepare('SELECT * FROM task_placements WHERE run_id = ? ORDER BY task_id')
+      .all(runId) as TaskPlacementRow[]
   }
 
   // Nearest first. Bounded one past the depth cap: past it the verdict is already decided.

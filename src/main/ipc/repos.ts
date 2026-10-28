@@ -101,6 +101,7 @@ import type {
 } from '../../shared/host-repo-catalog-contract'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
+import { linkRepoToRootProject } from '../project-root-identity-link'
 import {
   getProjectHostSetupForRepo,
   getProjectIdForProviderIdentity
@@ -1457,6 +1458,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       let aligned: ProjectHostSetupResult
       try {
+        // Why: a git-root id is proven on the target host, never inferred from the request.
+        await linkRepoToRootProject(store, result.repo, args.projectId)
         aligned = alignRepoWithRequestedProject(
           store,
           result.repo,

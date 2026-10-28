@@ -162,5 +162,15 @@ export const styles = StyleSheet.create({
   },
   diffMeta: {
     color: colors.textMuted
+  },
+  deliveryCaption: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    marginTop: spacing.xs,
+    maxWidth: '88%',
+    textAlign: 'right'
+  },
+  deliveryCaptionUnconfirmed: {
+    color: colors.statusAmber
   }
 })

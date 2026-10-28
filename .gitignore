@@ -110,6 +110,7 @@ docs/**
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/orca-yaml-requirements.md
 !docs/reference/presentation-derivation-projection.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-agent-turn-authority.md
@@ -117,6 +118,8 @@ docs/**
 !docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
+!docs/dws/
+!docs/dws/**
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

@@ -1,4 +1,7 @@
 import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc'
+import type { HostRelayReadiness } from '../runtime/relay/host-relay-startup'
+
+export type ServeRelayReadiness = HostRelayReadiness
 
 export type ServePairingUnavailableReason = PairingOfferUnavailableReason | 'disabled_by_operator'
 
@@ -23,6 +26,8 @@ export type ServeReadiness = {
   boundEndpoint: string | null
   advertisedEndpoint: string | null
   managedWslCliReconciliation: 'pending' | 'settled' | 'failed'
+  appVersion: string
+  relay: ServeRelayReadiness
   pairing: ServePairingReadiness
 }
 
@@ -77,17 +82,29 @@ export function renderServeReadiness(
       boundEndpoint: readiness.boundEndpoint,
       advertisedEndpoint: readiness.advertisedEndpoint,
       managedWslCliReconciliation: readiness.managedWslCliReconciliation,
+      // Why additive under schemaVersion 1: supervisors parsing this line ignore unknown keys.
+      appVersion: readiness.appVersion,
+      relay: readiness.relay,
       pairing: readiness.pairing
     })
   }
   return renderHumanReadiness(readiness)
 }
 
+function renderHumanRelay(relay: ServeRelayReadiness): string {
+  if (relay.state === 'unavailable') {
+    return `Relay unavailable: ${relay.reason}`
+  }
+  return `Relay: started (${relay.status ?? 'status not reported yet'})`
+}
+
 function renderHumanReadiness(readiness: ServeReadiness): string {
   const lines = [
     'Orca server ready',
+    `Version: ${readiness.appVersion}`,
     `Bound endpoint: ${readiness.boundEndpoint ?? 'websocket unavailable'}`,
-    `Advertised endpoint: ${readiness.advertisedEndpoint ?? 'unavailable'}`
+    `Advertised endpoint: ${readiness.advertisedEndpoint ?? 'unavailable'}`,
+    renderHumanRelay(readiness.relay)
   ]
   if (readiness.pairing.available) {
     if (readiness.pairing.webClientUrl) {

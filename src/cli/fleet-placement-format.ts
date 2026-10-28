@@ -1,4 +1,4 @@
-import type { FleetPlacementRejection } from '../shared/fleet-placement'
+import type { FleetPlacementRejected, FleetPlacementRejection } from '../shared/fleet-placement'
 import type { FleetPlacementViewResult } from '../shared/fleet-placement-view'
 import { formatByteCount } from './workspace-format'
 
@@ -32,7 +32,30 @@ function describeRejection(rejection: FleetPlacementRejection): string {
       return `missing ${rejection.capabilities.join(', ')}`
     case 'insufficient-memory':
       return `${formatByteCount(rejection.availableMemory)} available, ${formatByteCount(rejection.required)} required`
+    case 'insufficient-disk':
+      return `${formatByteCount(rejection.availableBytes)} disk free, ${formatByteCount(rejection.required)} required`
+    case 'insufficient-vram':
+      return `${formatByteCount(rejection.freeBytes)} VRAM free, ${formatByteCount(rejection.required)} required`
+    case 'model-not-resident':
+      return `model ${rejection.modelId} is not resident`
+    case 'resource-unknown':
+      return `${rejection.family} unknown (${rejection.cause}: ${rejection.detail})`
+    default: {
+      // Why: a newer host may send a reason this client predates; print it instead of crashing.
+      const unrecognized: never = rejection
+      return `unrecognized reason ${JSON.stringify((unrecognized as { reason?: unknown }).reason)}`
+    }
   }
+}
+
+export type RejectedHostReasons = Pick<FleetPlacementRejected, 'addresses' | 'reasons'>
+
+/** One indented line per host that was refused, in the words `fleet placement` uses. */
+export function formatRejectedHostLines(rejected: readonly RejectedHostReasons[]): string[] {
+  return rejected.map(
+    (host) =>
+      `    x ${host.addresses.join(', ')}: ${host.reasons.map(describeRejection).join('; ') || 'not judged'}`
+  )
 }
 
 export function formatFleetPlacementView(result: FleetPlacementViewResult): string {
@@ -62,9 +85,20 @@ export function formatFleetPlacementView(result: FleetPlacementViewResult): stri
       `  x ${rejected.addresses.join(', ')}: ${rejected.reasons.map(describeRejection).join('; ') || 'not judged'}`
     )
   }
+  const sshHosts = observation.coverage.sshHosts
+  const sshText = sshHosts
+    ? `${sshHosts.length} SSH target(s), ${sshHosts.filter((h) => h.outcome === 'measured').length} measured`
+    : 'SSH targets are not enumerated'
   lines.push(
-    `coverage: this machine + ${observation.coverage.runtimeEnvironments} paired runtime(s); SSH targets are not enumerated`
+    `coverage: this machine + ${observation.coverage.runtimeEnvironments} paired runtime(s); ${sshText}`
   )
+  for (const host of sshHosts ?? []) {
+    lines.push(
+      host.outcome === 'measured'
+        ? `  ssh ${host.label}: measured, relay up ${host.relayUptimeMs} ms`
+        : `  ssh ${host.label}: unknown (${host.reason}: ${host.detail})`
+    )
+  }
   lines.push('A proposal only — nothing was moved.')
   return lines.join('\n')
 }

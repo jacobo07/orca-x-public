@@ -14,6 +14,8 @@ export type UseMobileDictationOptions = {
 }
 
 export type UseMobileDictationResult = {
+  /** False when this app binary lacks the native audio module; start() then refuses. */
+  available: boolean
   status: DictationStatus
   isStarting: boolean
   isRecording: boolean

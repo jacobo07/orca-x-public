@@ -133,7 +133,10 @@ export function createTransferPayload(args: {
   const oldRepoId = sourceRepo.id
   const newRepoId = targetRepo.id
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
-  const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
+  // Why: one repo cannot decide root identity (it depends on the repos not shown): the conservative repo: id.
+  const targetProjection = projectHostSetupProjectionFromRepos([targetRepo], undefined, {
+    identityContext: []
+  })
   const targetProjectId =
     targetProjection.setups[0]?.projectId ?? targetProjection.projects[0]?.id ?? null
   return {

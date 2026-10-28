@@ -7,6 +7,7 @@ import {
 import type { FleetHostIdentity } from './fleet-host-identity'
 import type { FleetHostFacts, FleetResourceSample } from './fleet-resource-observation'
 import { planFleetPlacement, type FleetPlacementMember } from './fleet-placement'
+import { isMeasurementStale, measurementAgeMs } from './node-measurement-age'
 
 const GB = 1024 ** 3
 const NOW = 1_000_000
@@ -197,12 +198,16 @@ describe('fleet placement planning', () => {
     })
   })
 
-  it('prefers the current placement only on equal headroom, then the fingerprint', () => {
+  it('orders equal headroom by fingerprint even when the higher fingerprint is the current host', () => {
+    // Why: D-15 and D-13 drop the current-host tie-break; the marker is still reported for the CLI.
     const hosts = [member(vps, 'fp-b', 4 * GB), member(box, 'fp-a', 4 * GB)]
     expect(planFleetPlacement(hosts, request).selected?.fingerprint).toBe('fp-a')
-    expect(
-      planFleetPlacement(hosts, { ...request, currentFingerprint: 'fp-b' }).selected?.fingerprint
-    ).toBe('fp-b')
+    const current = planFleetPlacement(hosts, { ...request, currentFingerprint: 'fp-b' })
+    expect(current.selected?.fingerprint).toBe('fp-a')
+    expect(current.eligible.map((c) => [c.fingerprint, c.isCurrent])).toEqual([
+      ['fp-a', false],
+      ['fp-b', true]
+    ])
     expect(
       planFleetPlacement([member(vps, 'fp-b', 4 * GB), member(box, 'fp-a', 5 * GB)], {
         ...request,
@@ -221,5 +226,25 @@ describe('fleet placement planning', () => {
     expect(planFleetPlacement(hosts.toReversed(), request)).toEqual(
       planFleetPlacement(hosts, request)
     )
+  })
+
+  it('judges sample staleness with the shared age primitive at max-1, max and max+1', () => {
+    for (const age of [59_999, 60_000, 60_001]) {
+      const sample: FleetResourceSample = {
+        outcome: 'measured',
+        runtimeId: 'rt-vps',
+        startedAt: NOW - age,
+        totalMemory: 32 * GB,
+        availableMemory: 8 * GB,
+        availableMemorySource: 'free-memory',
+        processSweep: 'measured'
+      }
+      const plan = planFleetPlacement([member(vps, 'fp-vps', 8 * GB, { sample })], request)
+      const stale = isMeasurementStale(sample.startedAt, request.maxSampleAgeMs, NOW)
+      expect(plan.rejected[0]?.reasons ?? []).toEqual(
+        stale ? [{ reason: 'sample-stale', ageMs: measurementAgeMs(sample.startedAt, NOW) }] : []
+      )
+      expect(stale).toBe(age > 60_000)
+    }
   })
 })

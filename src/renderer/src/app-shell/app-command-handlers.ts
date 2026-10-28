@@ -4,7 +4,8 @@ import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-termin
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { revealProjectSidebar } from '@/lib/left-navigation-surface'
+import { openWorkspaceBoard } from '@/lib/workspace-board-command'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -152,7 +153,7 @@ export function createAppCommandHandlers(
           const nextShowSleeping = !store.showSleepingWorkspaces
           store.setShowSleepingWorkspaces(nextShowSleeping)
           if (nextShowSleeping) {
-            store.setSidebarOpen(true)
+            revealProjectSidebar(store)
           }
         })
     ],
@@ -187,7 +188,7 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('workspace.rename', () => {
-          useAppStore.getState().setSidebarOpen(true)
+          revealProjectSidebar(useAppStore.getState())
           requestScrollToCurrentWorkspaceRevealAndRename()
         })
       }
@@ -198,10 +199,7 @@ export function createAppCommandHandlers(
         if (activeView === 'settings') {
           return false
         }
-        return claim('workspace.openBoard', () => {
-          useAppStore.getState().setSidebarOpen(true)
-          window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
-        })
+        return claim('workspace.openBoard', () => openWorkspaceBoard(useAppStore.getState()))
       }
     ],
     [

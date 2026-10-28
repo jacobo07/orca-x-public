@@ -30,6 +30,8 @@ export type MobileNativeChatSession = {
   loadingEarlier: boolean
   /** Grow the window to page in older history. */
   loadEarlier: () => void
+  /** While true, live frames do not trim the window's head (the reader is in history). */
+  holdHistory: (holding: boolean) => void
 }
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
@@ -96,6 +98,12 @@ export function useMobileNativeChatSession(args: {
   // base (read / loadEarlier ordered tails); `applyAppend` folds live frames in.
   const mergerRef = useRef(createNativeChatMerger())
   const limitRef = useRef(INITIAL_LIMIT)
+  // Why: trimming the head under a reader removes the very row the list anchors on, so the
+  // view jumped (owner phone, 2026-10-27). Held, the window grows up to MAX_MESSAGES instead.
+  const holdHistoryRef = useRef(false)
+  const holdHistory = useCallback((holding: boolean) => {
+    holdHistoryRef.current = holding
+  }, [])
   // Tracks the live session so a late loadEarlier resolve can detect a swap.
   const sessionIdRef = useRef<string | null>(sessionId)
   sessionIdRef.current = sessionId
@@ -155,7 +163,7 @@ export function useMobileNativeChatSession(args: {
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
-          limit: limitRef.current,
+          limit: holdHistoryRef.current ? MAX_MESSAGES : limitRef.current,
           replaceSnapshot: !snapshotSeenRef.current
         })
         if (applied.kind === 'ignored') {
@@ -290,6 +298,7 @@ export function useMobileNativeChatSession(args: {
     error,
     hasMore,
     loadingEarlier,
-    loadEarlier
+    loadEarlier,
+    holdHistory
   }
 }

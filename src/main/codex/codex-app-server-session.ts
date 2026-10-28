@@ -317,7 +317,9 @@ export async function runCodexAppServerSession<T>(
   try {
     const session = async (): Promise<T> => {
       const initializeResult = await requestRpc('initialize', {
-        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
+        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
+        // Why: codex >= 0.155 refuses thread/start.dynamicTools (Orca's tools) unless the client opts in here.
+        capabilities: { experimentalApi: true }
       })
       notify('initialized')
       return body({ request: requestRpc, notify, initializeResult })

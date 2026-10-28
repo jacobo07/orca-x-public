@@ -76,7 +76,10 @@ function getProjectModel({
   if (projects.length > 0 || projectHostSetups.length > 0) {
     return { projects, projectHostSetups }
   }
-  const projection = projectHostSetupProjectionFromRepos(eligibleRepos)
+  // Why: eligibleRepos is a filtered subset with no full list in scope, so root identity is not judged here.
+  const projection = projectHostSetupProjectionFromRepos(eligibleRepos, undefined, {
+    identityContext: []
+  })
   return {
     projects: projection.projects,
     projectHostSetups: projection.setups

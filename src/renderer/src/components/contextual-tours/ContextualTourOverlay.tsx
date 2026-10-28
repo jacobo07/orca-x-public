@@ -24,6 +24,7 @@ import {
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
+import { revealProjectSidebar } from '@/lib/left-navigation-surface'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -313,7 +314,13 @@ export function ContextualTourOverlay(): JSX.Element | null {
           detachContextualTourSource(activeTourId, activeTourSource)
         }
       },
-      setSidebarOpen,
+      setSidebarOpen: (open) => {
+        if (open) {
+          revealProjectSidebar(useAppStore.getState())
+        } else {
+          setSidebarOpen(false)
+        }
+      },
       openTaskPage,
       openModal,
       canCreateWorkspace,

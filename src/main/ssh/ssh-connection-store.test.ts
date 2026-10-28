@@ -80,6 +80,22 @@ describe('SshConnectionStore', () => {
     sshConfigHostsToTargetsMock.mockReset()
   })
 
+  it('setHostKeyPin delegates to the store method that flushes', () => {
+    const pin = {
+      fingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      host: 'h',
+      port: 22,
+      pinnedAt: 1,
+      source: 'tofu-confirmed' as const
+    }
+    const setPin = vi.fn(() => null)
+    const store = new SshConnectionStore({ ...mockStore, setSshTargetHostKeyPin: setPin } as never)
+
+    store.setHostKeyPin('t1', pin)
+
+    expect(setPin).toHaveBeenCalledWith('t1', pin)
+  })
+
   it('listTargets delegates to store', () => {
     sshStore.listTargets()
     expect(mockStore.getSshTargets).toHaveBeenCalled()

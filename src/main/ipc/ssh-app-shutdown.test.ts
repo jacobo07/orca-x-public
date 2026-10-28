@@ -357,7 +357,7 @@ describe('SSH IPC handlers', () => {
     for (let tick = 0; tick < 5; tick++) {
       await Promise.resolve()
     }
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { interactive: true })
 
     quitTeardownStartGate.tryStart({ preventDefault() {} })
     const shutdown = beginSshShutdown()

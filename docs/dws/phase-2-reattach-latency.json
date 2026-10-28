@@ -1,0 +1,13 @@
+{
+  "verdict": "MEASURED",
+  "medianMs": 6762.5,
+  "minMs": 6489,
+  "maxMs": 8293,
+  "iqrMs": 443,
+  "count": 6,
+  "n": 6,
+  "instrument": "Date.now() immediately before page.reload(); stopped by page.waitForFunction(..., {polling: raf}) observing a tick >= the value read over ssh just before reload",
+  "resolutionMs": 17,
+  "firstAttachLatencyMs": 13479,
+  "note": "n=count alias per 02-05's established pattern (dws-offload-measurement.mjs's native field is count; this plan's own literal verify script reads r.n). firstAttachLatencyMs is the initial pairing+hydration navigation, recorded separately -- not part of the n=6 reattach set, which are same-context page.reload() probes with the device token already persisted. Each reattach probe includes this script's own tab-rediscovery loop (activateWorktree, wait for tabsByWorktree/workspaceSessionReady, then linear-scan up to 6 accumulated terminal tabs at ~700ms settle each before finding the tick-loop tab by nonce content) -- part of the measured number is this script's O(existing-tab-count) discovery approach, not necessarily an inherent product floor."
+}

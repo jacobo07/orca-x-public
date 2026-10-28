@@ -219,6 +219,12 @@ export function buildRemovedSshTargetCleanupPatch(
   delete nextDetectedPorts[targetId]
   const nextCredentialQueue = state.sshCredentialQueue.filter((req) => req.targetId !== targetId)
   const removedCredentialRequest = nextCredentialQueue.length !== state.sshCredentialQueue.length
+  // Why: a trust dialog for a removed target would answer into a target that no longer exists; main's 120 s timeout denies it.
+  const nextHostKeyTrustQueue = state.sshHostKeyTrustQueue.filter(
+    (req) => req.targetId !== targetId
+  )
+  const removedHostKeyTrustRequest =
+    nextHostKeyTrustQueue.length !== state.sshHostKeyTrustQueue.length
   const removedDeferredTarget =
     nextDeferredTargets.length !== state.deferredSshReconnectTargets.length
   const changed =
@@ -231,6 +237,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedDetectedPorts ||
     tabPtyState.changed ||
     removedCredentialRequest ||
+    removedHostKeyTrustRequest ||
     removedDeferredTarget ||
     removedDeferredSession ||
     removedPendingReconnect ||
@@ -261,6 +268,7 @@ export function buildRemovedSshTargetCleanupPatch(
         }
       : {}),
     ...(removedCredentialRequest ? { sshCredentialQueue: nextCredentialQueue } : {}),
+    ...(removedHostKeyTrustRequest ? { sshHostKeyTrustQueue: nextHostKeyTrustQueue } : {}),
     ...(removedDeferredTarget ? { deferredSshReconnectTargets: nextDeferredTargets } : {}),
     ...(removedDeferredSession ? { deferredSshSessionIdsByTabId: nextDeferredSessions } : {}),
     ...(removedPendingReconnect ? { pendingReconnectPtyIdByTabId: nextPendingReconnect } : {}),

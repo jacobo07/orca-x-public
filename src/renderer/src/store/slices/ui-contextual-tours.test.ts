@@ -401,6 +401,28 @@ describe('createUISlice contextual tours', () => {
     expect(store.getState().lastCompletedContextualTourId).toBeNull()
   })
 
+  it('closes a left-docked panel and advances the split step, because an open sidebar yields to it', () => {
+    vi.stubGlobal('window', { api: { ui: { set: vi.fn(() => Promise.resolve()) } } })
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.setState({ sidebarOpen: true, sidePanelDock: 'left', rightSidebarOpen: true })
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    store.getState().recordFeatureInteraction('terminal-pane-split')
+
+    expect(store.getState().rightSidebarOpen).toBe(false)
+    expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+  })
+
   it('marks the active contextual tour suppressed when its owning source disables', () => {
     const store = createUIStore()
     store.setState({

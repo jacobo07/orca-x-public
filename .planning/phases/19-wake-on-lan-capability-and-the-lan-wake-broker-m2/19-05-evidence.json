@@ -1,0 +1,129 @@
+{
+  "label": "SCRIPTED CLIENT",
+  "plane": "disposable windowless serve host on this Windows laptop, --serve-wake-broker, scratch userData and home, loopback only; scripted phone-protocol client",
+  "head": "0ee75031d201cd3097ab7a38aaf7aa2752608bd6",
+  "outBuiltFrom": "1de3a0c85ff3324528451646ce0a4e660b935fef (GEX44 /tmp/orca-phone-p19-20261027T201804Z, out.tgz sha256 633f3a15...2126)",
+  "startedAt": "2026-10-27T20:25:14.762Z",
+  "targetMac": "02:00:5e:19:00:01 (locally administered, fictitious)",
+  "ownerDevicesHashBefore": "510f9b74b076f86570b3ad39d3c3bdcfe522a8e9f6a43ac218a616f7a889a8ad",
+  "baselineScratchFamilyCount": 0,
+  "capabilitiesHaveWakeBroker": true,
+  "brokerServeLine": "[serve] wake broker: enabled (0 targets)",
+  "admin": {
+    "transport": "runtime named pipe (local caller)",
+    "targetId": "wt_93b0f480c344"
+  },
+  "macDetectorPositiveControl": true,
+  "tracer": {
+    "stages": ["requested", "authorized", "packet-sent"],
+    "composed": ["requested", "authorized", "packet-sent"],
+    "wakeId": "wk_4d795f2a572c9e7d",
+    "replayed": false,
+    "adopted": false
+  },
+  "frameLength": 102,
+  "frameHexPrefix": "ffffffffffff02005e190001",
+  "brokerHostRelaunchReaped": true,
+  "relaunchServeLine": "[serve] wake broker: enabled (1 targets)",
+  "deviceBTargets": [],
+  "deviceBStatusOfAWake": "wake_unknown",
+  "adoptionTiming": {
+    "msSinceFirstWakeRequested": 6047,
+    "windowMs": 10000,
+    "fallbackUsed": false
+  },
+  "phoneRepliesChecked": 13,
+  "phoneRepliesWithMacShape": [],
+  "brokerHostStopReaped": true,
+  "noBrokerHost": {
+    "capabilitiesHaveWakeBroker": false,
+    "positiveControlCapabilityCount": 54,
+    "requestCode": "wake_broker_disabled",
+    "targetsCode": "wake_broker_disabled",
+    "localAdminTargetListCode": "wake_broker_disabled",
+    "serveWakeLine": "absent"
+  },
+  "distinctAcceptedWakes": 2,
+  "listenerCount": 2,
+  "everyFrameIsMagicPacketForTarget": true,
+  "steps": [
+    {
+      "step": "A granted wake (tracer)",
+      "code": "ACCEPTED",
+      "listenerCountAfter": 1,
+      "wakeId": "wk_4d795f2a572c9e7d",
+      "replayed": false,
+      "adopted": false,
+      "stages": ["requested", "authorized", "packet-sent"]
+    },
+    {
+      "step": "B (no grant) requests the registered target",
+      "code": "wake_grant_missing",
+      "listenerCountAfter": 1
+    },
+    {
+      "step": "B requests an unregistered target id",
+      "code": "wake_grant_missing",
+      "listenerCountAfter": 1
+    },
+    {
+      "step": "A sends requestId R (first)",
+      "code": "ACCEPTED",
+      "listenerCountAfter": 2,
+      "wakeId": "wk_8bae56c365bedf59",
+      "replayed": false,
+      "adopted": false,
+      "stages": ["requested", "authorized", "packet-sent"]
+    },
+    {
+      "step": "A sends the same requestId R again",
+      "code": "ACCEPTED",
+      "listenerCountAfter": 2,
+      "wakeId": "wk_8bae56c365bedf59",
+      "replayed": true,
+      "adopted": false,
+      "stages": ["requested", "authorized", "packet-sent"]
+    },
+    {
+      "step": "A sends a new requestId inside the adoption window",
+      "code": "ACCEPTED",
+      "listenerCountAfter": 2,
+      "wakeId": "wk_8bae56c365bedf59",
+      "replayed": false,
+      "adopted": true,
+      "stages": ["requested", "authorized", "packet-sent"]
+    },
+    {
+      "step": "paired device on a host without --serve-wake-broker requests a wake",
+      "code": "wake_broker_disabled",
+      "listenerCountAfter": 2
+    }
+  ],
+  "listenerCountFinal": 2,
+  "spawnedPidsReaped": true,
+  "scratchFamilyCountAfterTeardown": 0,
+  "scratchDirsAbsentAfterTeardown": {
+    "broker": true,
+    "nobroker": true,
+    "parent": true
+  },
+  "ownerDevicesHashAfter": "510f9b74b076f86570b3ad39d3c3bdcfe522a8e9f6a43ac218a616f7a889a8ad",
+  "ownerDevicesUnchanged": true,
+  "finishedAt": "2026-10-27T20:25:57.159Z",
+  "revokedDeviceRefusal": {
+    "label": "UNIT in-process (real RuntimeRpcServer)",
+    "notScriptedClient": true,
+    "test": "src/main/runtime/wake-broker-revoke-in-process.test.ts",
+    "ranAtHead": "0ee75031d201cd3097ab7a38aaf7aa2752608bd6",
+    "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/wake-broker-revoke-in-process.test.ts",
+    "result": "Test Files 1 passed (1), Tests 1 passed (1), exit 0 (2026-10-27 21:26 local)",
+    "assertedByTheTest": {
+      "beforeRevoke": "ok:true, stages requested/authorized/packet-sent, loopback listener holds exactly 1 frame of 102 bytes",
+      "revoke": "revokeMobileDevice(deviceId) resolves true",
+      "inFlightRefusal": "error.code wake_device_revoked; error.data does not contain device_revoked",
+      "overWebSocket": "unauthorized with data.reason device_revoked at dispatch",
+      "afterRevoke": "listener still holds exactly 1 frame after a 1500 ms settle (listener count 1 before, 1 after); no grant in memory or on disk"
+    },
+    "liveRevoke": "live revoke over a headless host: not claimed (no local revoke transport; Settings-only)"
+  }
+}

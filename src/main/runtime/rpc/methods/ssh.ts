@@ -6,7 +6,11 @@ import {
   listRegisteredSshTargets
 } from '../../../ipc/ssh'
 import { defineMethod, type RpcMethod } from '../core'
-import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
+import {
+  getHostKeyRefusalReason,
+  getPublicSshError,
+  getPublicSshState
+} from '../../public-ssh-state'
 
 const SshTarget = z.object({
   targetId: z.string().min(1)
@@ -30,9 +34,15 @@ export const SSH_METHODS: RpcMethod[] = [
     handler: async (params) => {
       try {
         return { state: getPublicSshState(await connectRegisteredSshTarget(params.targetId)) }
-      } catch {
+      } catch (err) {
         const state = getRegisteredSshState(params.targetId)
-        throw new Error(getPublicSshError(state?.status ?? 'error'))
+        // Why: the failed connection is dropped from the pool, so the typed refusal on the error is the only witness.
+        throw new Error(
+          getPublicSshError(
+            state?.status ?? 'error',
+            getHostKeyRefusalReason(err, state?.hostIdentity)
+          )
+        )
       }
     }
   }),

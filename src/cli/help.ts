@@ -15,6 +15,7 @@ Startup:
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
   fleet placement           Propose which host has room for new work (reads only)
+  fleet manifest            Show each node's measured resources with their age (reads only)
 
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
@@ -57,6 +58,15 @@ Projects:
   project setup-create      Create independent project host setup metadata
   project setup-update      Update project host setup metadata
   project setup-delete      Remove a project host setup
+  project requirements      Measure a repo's orca.yaml requirements on its host (runs nothing)
+  project prepare           Show or run a repo's declared prepare steps by explicit approval hash
+  project replica-compare   Compare a project's setups with its local setup over the SSH relay (reads only)
+  project replica-capsule   Capture a local setup's uncommitted work as a capsule ref
+  project replica-capsule-list   List a local setup's capsules (reads only)
+  project replica-capsule-restore   Plan, or with --apply perform, a capsule restore
+  project replica-sync   Fast-forward a local setup to its SSH replica's tip (one-way)
+  project replica-preserve-divergence   Keep both tips of a diverged pair as refs and report the conflict
+  project replica-reconcile   Merge local and remote capsules into a commit under refs/orca/reconciled
 
 Repos:
   repo list                 List repos registered in Orca
@@ -220,7 +230,7 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
-  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
+  orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
@@ -251,12 +261,22 @@ Common Commands:
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--tab] [--json]
   orca project list [--json]
-  orca project setups [--project <id>] [--host <host-id>] [--json]
+  orca project setups [--project <id>] [--host <host-id>] [--all-environments] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
   orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-delete --setup <setup-id> [--json]
+  orca project requirements --repo <selector> [--json]
+  orca project prepare --repo <selector> --plan [--json]
+  orca project prepare --repo <selector> --requirement <id> --approve <hash> [--json]
+  orca project replica-compare --project <id> [--setup <setup-id>] [--json]
+  orca project replica-capsule --setup <setup-id> [--json]
+  orca project replica-capsule-list --setup <setup-id> [--json]
+  orca project replica-capsule-restore --setup <setup-id> --capsule <ref> [--apply] [--json]
+  orca project replica-sync --setup <setup-id> [--json]
+  orca project replica-preserve-divergence --setup <setup-id> [--json]
+  orca project replica-reconcile --setup <setup-id> --remote-capsule <sha> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]

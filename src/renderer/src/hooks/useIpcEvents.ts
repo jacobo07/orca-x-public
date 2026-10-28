@@ -12,7 +12,7 @@ import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
+import { openWorkspaceBoard } from '@/lib/workspace-board-command'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
@@ -1411,8 +1411,7 @@ export function useIpcEvents(): void {
           if (store.activeView === 'settings') {
             return
           }
-          store.setSidebarOpen(true)
-          window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          openWorkspaceBoard(store)
         })
       )
     }
@@ -2818,6 +2817,22 @@ export function useIpcEvents(): void {
         useAppStore.getState().removeSshCredentialRequest(requestId)
       })
     )
+
+    // Why optional: the web preload has no trust surface, so its connects of unpinned hosts fail closed in main.
+    const unsubscribeHostKeyTrustRequest = window.api.ssh.onHostKeyTrustRequest?.((data) => {
+      useAppStore.getState().enqueueSshHostKeyTrustRequest(data)
+    })
+    if (unsubscribeHostKeyTrustRequest) {
+      unsubs.push(unsubscribeHostKeyTrustRequest)
+    }
+    const unsubscribeHostKeyTrustResolved = window.api.ssh.onHostKeyTrustResolved?.(
+      ({ requestId }) => {
+        useAppStore.getState().removeSshHostKeyTrustRequest(requestId)
+      }
+    )
+    if (unsubscribeHostKeyTrustResolved) {
+      unsubs.push(unsubscribeHostKeyTrustResolved)
+    }
 
     unsubs.push(
       window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {

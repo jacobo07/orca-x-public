@@ -80,6 +80,7 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
+        onReaderInHistoryChange={session.holdHistory}
         onSend={images.sendNativeChat}
         pending={controller.chatPending}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}

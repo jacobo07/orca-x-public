@@ -21,6 +21,11 @@ import {
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
+import {
+  CANCEL_WORKSTREAM_REFUSAL_CODES,
+  STOP_EXECUTION_REFUSAL_CODES
+} from '../../../shared/execution-effect-refusals'
+import { HOST_WAKE_REFUSAL_CODES } from '../../../shared/host-wake'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -68,6 +73,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
+  // Why: the runtime throws these as plain Errors; listing them publishes an own `code` while `message` is unchanged.
+  ...STOP_EXECUTION_REFUSAL_CODES,
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
@@ -113,6 +120,11 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',
+  'remote_caller_refused',
+  'fleet_unavailable',
+  'task_not_placeable',
+  'placement_conflict',
+  'placement_mismatch',
   'invalid_argument',
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
@@ -122,7 +134,11 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
-  SKILL_INSTALL_RPC_ERROR_CODE
+  SKILL_INSTALL_RPC_ERROR_CODE,
+  // Why: thrown with `.code` (not message-keyed) so the authority in `.data` reaches the client.
+  ...CANCEL_WORKSTREAM_REFUSAL_CODES,
+  // Why: wake refusals must stay distinct from runtime_error and from any code a client falls back on (D-08).
+  ...HOST_WAKE_REFUSAL_CODES
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

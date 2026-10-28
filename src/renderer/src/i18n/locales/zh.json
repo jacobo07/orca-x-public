@@ -10,6 +10,55 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "在此继续",
+      "running": "正在继续…",
+      "targetLabel": "继续到",
+      "targetPlaceholder": "选择主机",
+      "source": {
+        "uncommittedChanges": "此工作区有未提交的更改，这些更改不会随之迁移。请先提交或 stash。未更改任何内容。",
+        "statusUnknown": "无法检查此工作区是否有未提交的更改，因此未继续任何内容。请重试。"
+      },
+      "result": {
+        "restored": "已在另一台主机上恢复。尚未启动任何内容；标签页只有在打开时才会启动。",
+        "restoredEmpty": "已恢复，但此快照没有可打开的终端。",
+        "restoredUnlisted": "已恢复，但无法列出每个标签页将执行的操作。",
+        "hostUnverified": "尚未验证该主机，因此未恢复任何内容。连接后请重试。",
+        "inFlight": "该工作区的另一次恢复尚未完成。"
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "此工作区的设置与要继续的项目不一致。",
+        "targetSetupProjectMismatch": "该主机上的设置属于另一个项目。",
+        "targetSetupMissing": "此项目尚未在该主机上设置。",
+        "targetSetupNotReady": "此项目在该主机上的设置尚未就绪。",
+        "sameHost": "此快照已经属于该主机。",
+        "sourceHostMismatch": "此快照保存于与此工作区设置不同的主机。",
+        "locationOutsideSourceSetup": "此工作区位于项目文件夹之外，因此在该主机上没有对应位置。",
+        "locationKindUnsupported": "只有项目的工作树可以在另一台主机上继续，普通文件夹不行。",
+        "startupCwdOutsideSourceSetup": "此快照中的某个终端在项目文件夹之外启动，因此无法在该主机上对应。"
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "尚未在那里设置：该主机上此工作区的副本在此客户端中未打开。未更改任何内容。",
+        "sourceSetupMissing": "找不到此工作区自身的设置，因此无法在其他主机上继续。"
+      },
+      "pane": {
+        "label": "终端 {{number}}",
+        "disposition": {
+          "resume": "恢复智能体会话",
+          "restart": "在其文件夹中启动新终端",
+          "unavailable": "无法在那里打开"
+        },
+        "reason": {
+          "providerSessionPresent": "其智能体会话在该主机上。",
+          "relaunchable": "可以按已保存的启动方式重新启动。",
+          "hostUnavailable": "该主机不可用。",
+          "hostUnverified": "尚未验证该主机。",
+          "liveElsewhere": "已在别处打开。",
+          "notConfirmed": "无法在那里确认其会话。",
+          "nothingRunnable": "没有可运行的内容。"
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "已恢复，未运行",
       "sleptTitle": "已休眠，未运行",
@@ -6796,6 +6845,36 @@
           "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
+          "relationTerm": "关系",
+          "relationUnverified": "关系未验证",
+          "relationSame": "相同提交",
+          "relationAhead": "本地副本领先 {{value0}} 个提交",
+          "relationBehind": "本地副本落后 {{value0}} 个提交",
+          "relationDiverged": "与本地副本已分叉（+{{value0}}/-{{value1}}）",
+          "relationUnrelated": "历史无关",
+          "relationAheadUncounted": "本地副本领先",
+          "relationBehindUncounted": "本地副本落后",
+          "relationDivergedUncounted": "与本地副本已分叉",
+          "relationReasonHostUnreachable": "无法连接到主机",
+          "relationReasonTipUnknown": "无法读取当前提交",
+          "relationReasonUnborn": "尚无提交",
+          "relationReasonRelayTooOld": "远程 Orca 辅助程序版本过旧，无法比较",
+          "relationReasonTransportUnsupportedHost": "此类主机不支持比较",
+          "relationReasonNoComparisonSite": "没有可供比较的本地副本",
+          "relationReasonBundleTooLarge": "变更过大，无法比较",
+          "relationReasonBundleVerifyFailed": "比较数据未通过验证",
+          "relationReasonBundleHeadsMismatch": "比较数据与副本不一致",
+          "relationReasonTransferInterrupted": "比较已中断",
+          "relationReasonShallow": "浅克隆：历史记录不完整",
+          "relationReasonEvidenceStale": "副本在比较之后已发生变化",
+          "relationReasonNotCompared": "尚未比较",
+          "relationReasonNotAGitRepo": "文件夹工作区：不是 Git 仓库",
+          "relationReasonWorktreeNotVerifiedClean": "提交相同，但工作树未验证为干净",
+          "compareAction": "比较副本",
+          "comparing": "正在比较…",
+          "pairUnavailableRemote": "此客户端无法使用副本比较",
+          "pairUnavailableNoService": "副本比较不可用：副本服务未运行",
+          "pairFailed": "无法比较副本。在比较成功之前，关系保持未验证状态",
           "nestedHostLabel": "{{value0}} via {{value1}}",
           "externalWorktrees": "外部工作树",
           "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",

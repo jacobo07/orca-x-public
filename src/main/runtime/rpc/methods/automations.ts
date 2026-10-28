@@ -8,6 +8,7 @@ import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { defineMethod, type RpcMethod } from '../core'
+import { automationResultForClient } from '../project-root-identity-client-projection'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -149,26 +150,32 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.list',
     params: null,
-    handler: (_params, { runtime }) => ({ automations: runtime.listAutomations() })
+    handler: (_params, context) =>
+      automationResultForClient({ automations: context.runtime.listAutomations() }, context)
   }),
   defineMethod({
     name: 'automation.show',
     params: AutomationId,
-    handler: (params, { runtime }) => ({ automation: runtime.showAutomation(params.id) })
+    handler: (params, context) =>
+      automationResultForClient({ automation: context.runtime.showAutomation(params.id) }, context)
   }),
   defineMethod({
     name: 'automation.create',
     params: AutomationCreate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.createAutomation(params)
-    })
+    handler: async (params, context) =>
+      automationResultForClient(
+        { automation: await context.runtime.createAutomation(params) },
+        context
+      )
   }),
   defineMethod({
     name: 'automation.update',
     params: AutomationUpdate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.updateAutomation(params.id, params.updates)
-    })
+    handler: async (params, context) =>
+      automationResultForClient(
+        { automation: await context.runtime.updateAutomation(params.id, params.updates) },
+        context
+      )
   }),
   defineMethod({
     name: 'automation.delete',
@@ -178,13 +185,16 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.runNow',
     params: AutomationId,
-    handler: async (params, { runtime }) => ({ run: await runtime.runAutomationNow(params.id) })
+    handler: async (params, context) =>
+      automationResultForClient({ run: await context.runtime.runAutomationNow(params.id) }, context)
   }),
   defineMethod({
     name: 'automation.runs',
     params: AutomationRuns,
-    handler: (params, { runtime }) => ({
-      runs: runtime.listAutomationRuns(params.automationId)
-    })
+    handler: (params, context) =>
+      automationResultForClient(
+        { runs: context.runtime.listAutomationRuns(params.automationId) },
+        context
+      )
   })
 ]

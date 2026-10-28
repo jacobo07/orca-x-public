@@ -1,7 +1,13 @@
+import type { MobileNativeChatPendingDelivery } from './mobile-native-chat-delivery-evidence'
+
 export type MobileNativeChatPendingMessage = {
   id: string
   text: string
+  /** Evidence so far: the PTY write was accepted; the transcript echo has not landed. */
+  delivery: MobileNativeChatPendingDelivery
   expectedOccurrence: number
+  /** Which equal user turn after `baselineTailMessageId` is this send's echo (1 = the first). */
+  echoOrdinalAfterTail?: number
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
   baselineTailMessageId: string | null
@@ -51,15 +57,36 @@ export function appendMobileNativeChatPending(
       {
         id,
         text,
+        delivery: 'written',
         expectedOccurrence:
           origin.normalizedText === ''
             ? expectedImageEchoOrdinal
             : origin.baselineOccurrences + earlierOutstanding + 1,
+        // Why: earlier outstanding equal sends had not echoed when this tail was captured, so theirs land after it too.
+        ...(origin.normalizedText === '' ? {} : { echoOrdinalAfterTail: earlierOutstanding + 1 }),
         baselineTailMessageId: origin.baselineTailMessageId,
         ...(images?.length ? { images } : {})
       }
     ]
   }
+}
+
+/** The admission bound passed without a transcript echo. Unknown ids leave the map untouched,
+ *  so a bubble its echo already retired is never resurrected. */
+export function markMobileNativeChatPendingUnconfirmed(
+  previous: PendingByKey,
+  id: string
+): PendingByKey {
+  for (const [key, items] of Object.entries(previous)) {
+    const index = items.findIndex((item) => item.id === id && item.delivery !== 'unconfirmed')
+    if (index !== -1) {
+      const next = items.map((item, i) =>
+        i === index ? { ...item, delivery: 'unconfirmed' as const } : item
+      )
+      return { ...previous, [key]: next }
+    }
+  }
+  return previous
 }
 
 export function mergeWaitingSessionPending(

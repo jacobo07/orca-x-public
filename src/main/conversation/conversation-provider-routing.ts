@@ -33,7 +33,10 @@ export type ProviderRoute =
   | { outcome: 'routed'; entry: ConversationProviderEntry; skipped: ProviderSkip[] }
   | { outcome: 'refused'; skipped: ProviderSkip[] }
 
-function rank(entries: readonly ConversationProviderEntry[], requirement: TurnRequirement): ConversationProviderEntry[] {
+function rank(
+  entries: readonly ConversationProviderEntry[],
+  requirement: TurnRequirement
+): ConversationProviderEntry[] {
   const score = (entry: ConversationProviderEntry): number => {
     if (entry.provider === requirement.preferred) {
       return 0
@@ -67,16 +70,29 @@ export async function routeConversationTurn(params: {
       continue
     }
     if (requirement.needsTools && entry.tools !== 'supported') {
-      skipped.push({ provider: entry.provider, reason: `cannot serve Orca's tools (${entry.tools})` })
+      skipped.push({
+        provider: entry.provider,
+        reason: `cannot serve Orca's tools (${entry.tools})`
+      })
       continue
     }
     const quota = params.quota.read(entry.provider, params.now)
     if (quota.state === 'exhausted') {
-      const until = quota.resetsAtMs === null ? 'an unstated time' : new Date(quota.resetsAtMs).toISOString()
+      const until =
+        quota.resetsAtMs === null ? 'an unstated time' : new Date(quota.resetsAtMs).toISOString()
       skipped.push({ provider: entry.provider, reason: `quota ${quota.reported} until ${until}` })
       continue
     }
-    const auth = await entry.checkAuth()
+    // An auth check that cannot answer is not availability: skip the provider with the reason.
+    let auth: Awaited<ReturnType<ConversationProviderEntry['checkAuth']>>
+    try {
+      auth = await entry.checkAuth()
+    } catch (error) {
+      auth = {
+        ready: false,
+        detail: `auth check failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
     if (!auth.ready) {
       skipped.push({ provider: entry.provider, reason: auth.detail })
       continue

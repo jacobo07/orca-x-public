@@ -150,6 +150,8 @@ export function TerminalPanelToolbar({
             <DropdownMenuItem
               key={profile.id}
               onSelect={() => launchProfile(profile.id)}
+              data-terminal-profile-kind={profile.kind}
+              data-testid={`terminal-profile-menu-item-${profile.id}`}
               className="gap-2 text-[12px]"
             >
               <TerminalProfileIcon profile={profile} />

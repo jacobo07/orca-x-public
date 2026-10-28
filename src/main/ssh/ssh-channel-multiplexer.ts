@@ -21,6 +21,8 @@ import {
   type MultiplexerWriterLane
 } from './ssh-multiplexer-transport-writer'
 
+import { tallyRelaySentMethod } from './relay-sent-method-tally'
+
 export type { MultiplexerTransport, MultiplexerWriteSettlement }
 
 type PendingRequest = {
@@ -410,6 +412,7 @@ export class SshChannelMultiplexer {
     msg: JsonRpcMessage,
     onSettled?: (result: MultiplexerWriteSettlement) => void
   ): void {
+    tallyRelaySentMethod('method' in msg ? msg.method : undefined)
     const seq = this.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, this.highestReceivedSeq)
     this.trackOutgoingTimestamp(seq, false)

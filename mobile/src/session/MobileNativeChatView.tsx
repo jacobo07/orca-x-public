@@ -25,7 +25,7 @@ import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -34,6 +34,9 @@ import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 const INPUT_LOCK_SETTLE_MS = 600
+// Why: off the live edge the 40-row window trims from the top and "load earlier" prepends;
+// anchoring the first visible row keeps the reader's text still (owner-phone repro 2026-10-27).
+const READER_ANCHOR = { minIndexForVisible: 0 }
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -57,6 +60,8 @@ type Props = {
   hasMore?: boolean
   loadingEarlier?: boolean
   onLoadEarlier?: () => void
+  /** Told whenever the reader leaves or returns to the live edge. */
+  onReaderInHistoryChange?: (inHistory: boolean) => void
   onSend: (text: string) => Promise<boolean>
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   pending: MobileNativeChatPendingItem[]
@@ -125,6 +130,7 @@ export function MobileNativeChatView({
   hasMore,
   loadingEarlier,
   onLoadEarlier,
+  onReaderInHistoryChange,
   onSend,
   pending,
   imagePreviewsByMessageId,
@@ -178,7 +184,7 @@ export function MobileNativeChatView({
   // `data` is the list source: folded transcript + synthetic streaming bubble +
   // route-owned accepted echoes. Memoize on the same deps so the
   // downstream autoscroll effects/`renderItem` keep referential stability.
-  const { data } = useMemo(
+  const { data, deliveryByMessageId } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
         folded,
@@ -200,6 +206,11 @@ export function MobileNativeChatView({
     const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
     return () => clearTimeout(t)
   }, [data.length, atBottom, keyboardInset])
+
+  useEffect(() => {
+    onReaderInHistoryChange?.(!atBottom)
+    return () => onReaderInHistoryChange?.(false)
+  }, [atBottom, onReaderInHistoryChange])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -237,24 +248,14 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
-  // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
-
-  const renderItem = useCallback(
-    ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <MobileNativeChatMessage
-        message={item}
-        toolsExpanded={toolsExpanded}
-        fontScale={fontScale}
-        messageIndex={index}
-        onScrollToMessage={onScrollToMessage}
-        onOpenFile={onOpenFile}
-      />
-    ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
-  )
+  const renderItem = useMobileNativeChatRowRenderer({
+    listRef,
+    deliveryByMessageId,
+    status,
+    toolsExpanded,
+    fontScale,
+    onOpenFile
+  })
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
@@ -292,6 +293,7 @@ export function MobileNativeChatView({
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
               scrollEventThrottle={32}
+              maintainVisibleContentPosition={atBottom ? undefined : READER_ANCHOR}
               onContentSizeChange={() => {
                 if (data.length > 0 && atBottom) {
                   listRef.current?.scrollToEnd({ animated: false })

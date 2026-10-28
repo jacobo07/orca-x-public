@@ -6,7 +6,12 @@ import { writeFileDurableSync } from '../durable-file-write'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
-import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
+import {
+  carryProjectStateThroughIdentityChange,
+  localRepoIdSet
+} from '../../shared/project-identity-succession'
+import { remapAgentProjectIds } from '../../shared/agent-project-id-remap'
+import { remapWorktreeMetaProjectIds } from '../../shared/worktree-meta-project-id-remap'
 import type { Agent } from '../../shared/agent-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
@@ -112,7 +117,11 @@ function isRepoBackedProjectHostSetup(
 
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
-  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects)
+  const succession = carryProjectStateThroughIdentityChange(
+    projection.projects,
+    state.projects,
+    localRepoIdSet(state.repos)
+  )
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -140,15 +149,11 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
   // Why agents are remapped here rather than by a resolver of their own: `remappedProjectIds` is
   // computed on each read and then discarded, so a durable dependent that misses this moment has
   // no later opportunity — its owning project simply stops existing under the id it stored.
-  const agents = state.agents.map((agent) => {
-    const remappedProjectId = agent.projectId
-      ? succession.remappedProjectIds.get(agent.projectId)
-      : undefined
-    return remappedProjectId ? { ...agent, projectId: remappedProjectId } : agent
-  })
+  const agents = remapAgentProjectIds(state.agents, succession.remappedProjectIds)
   return {
     ...state,
     agents,
+    worktreeMeta: remapWorktreeMetaProjectIds(state.worktreeMeta, succession.remappedProjectIds),
     projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }

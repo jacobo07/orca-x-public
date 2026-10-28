@@ -3,15 +3,35 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
+import { remapAgentProjectIds } from '../../../shared/agent-project-id-remap'
+import {
+  carryProjectStateThroughIdentityChange,
+  localRepoIdSet
+} from '../../../shared/project-identity-succession'
+import { remapWorktreeMetaProjectIds } from '../../../shared/worktree-meta-project-id-remap'
+
+/** State the compatibility merge reads and, for the optional dependents, remaps. */
+export type ProjectHostSetupCompatibilityState = Pick<
+  PersistedState,
+  'projects' | 'projectHostSetups'
+> &
+  Partial<Pick<PersistedState, 'agents' | 'worktreeMeta'>>
+
+function dependentProjectIds(state: ProjectHostSetupCompatibilityState): string {
+  return JSON.stringify([
+    (state.agents ?? []).map((agent) => agent.projectId),
+    Object.entries(state.worktreeMeta ?? {}).map(([id, meta]) => [id, meta.projectId])
+  ])
+}
 
 export function projectHostSetupCompatibilityStateEqual(
-  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
-  nextState: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+  state: ProjectHostSetupCompatibilityState,
+  nextState: ProjectHostSetupCompatibilityState
 ): boolean {
   return (
     JSON.stringify(state.projects ?? []) === JSON.stringify(nextState.projects) &&
-    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(nextState.projectHostSetups)
+    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(nextState.projectHostSetups) &&
+    dependentProjectIds(state) === dependentProjectIds(nextState)
   )
 }
 
@@ -28,13 +48,14 @@ function projectHostKey(setup: Pick<ProjectHostSetup, 'projectId' | 'hostId'>): 
 }
 
 export function mergeProjectHostSetupCompatibilityState(
-  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  state: ProjectHostSetupCompatibilityState,
   repos: readonly Repo[]
-): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+): ProjectHostSetupCompatibilityState {
   const projection = projectHostSetupProjectionFromRepos(repos)
   const succession = carryProjectStateThroughIdentityChange(
     projection.projects,
-    state.projects ?? []
+    state.projects ?? [],
+    localRepoIdSet(repos)
   )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
@@ -66,9 +87,16 @@ export function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  const { remappedProjectIds } = succession
   return {
     projects: [...succession.projects, ...independentProjects],
-    projectHostSetups: [...projection.setups, ...independentSetups]
+    projectHostSetups: [...projection.setups, ...independentSetups],
+    // Why: only the dependents the caller handed in are returned, so a load-path spread of this
+    // result never overwrites a field with undefined.
+    ...(state.agents ? { agents: remapAgentProjectIds(state.agents, remappedProjectIds) } : {}),
+    ...(state.worktreeMeta
+      ? { worktreeMeta: remapWorktreeMetaProjectIds(state.worktreeMeta, remappedProjectIds) }
+      : {})
   }
 }
 

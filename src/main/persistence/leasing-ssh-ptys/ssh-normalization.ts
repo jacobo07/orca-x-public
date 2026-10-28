@@ -4,6 +4,7 @@ import type {
   SshTarget
 } from '../../../shared/ssh-types'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
+import { parseHostKeyPin } from '../../ssh/ssh-host-key-pin-verifier'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -42,6 +43,16 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   }
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
+  }
+  // Why: a damaged pin is kept raw so the verifier refuses it; dropping it would downgrade the host to unpinned.
+  if (target.hostKeyPin === undefined) {
+    delete normalized.hostKeyPin
+  } else {
+    normalized.hostKeyPin = parseHostKeyPin(target.hostKeyPin) ?? target.hostKeyPin
+  }
+  // Why: the reset marker only means something while there is no pin; a stray value must not persist.
+  if (target.hostKeyPinReset !== true || normalized.hostKeyPin !== undefined) {
+    delete normalized.hostKeyPinReset
   }
   return normalized
 }

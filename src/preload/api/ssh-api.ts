@@ -75,4 +75,26 @@ export type SshApi = {
   ) => () => void
   onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
   submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  // Why optional: the web preload deliberately has no trust surface, so a paired/web connect of an unpinned host fails closed in main.
+  onHostKeyTrustRequest?: (callback: (data: SshHostKeyTrustRequestEvent) => void) => () => void
+  onHostKeyTrustResolved?: (callback: (data: { requestId: string }) => void) => () => void
+  submitHostKeyTrust?: (args: { requestId: string; trust: boolean }) => Promise<void>
+  replaceHostKeyPin?: (args: {
+    targetId: string
+    expectedPreviousFingerprint: string
+  }) => Promise<
+    { replaced: true } | { replaced: false; reason: 'target_not_found' | 'no_pin' | 'stale_pin' }
+  >
+}
+
+/** Desktop-only main->renderer event; it never crosses the paired-client wire. */
+export type SshHostKeyTrustRequestEvent = {
+  requestId: string
+  targetId: string
+  label: string
+  host: string
+  port: number
+  offeredFingerprint: string
+  algorithm?: string
+  previousFingerprint?: string
 }

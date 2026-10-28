@@ -37,6 +37,9 @@ export type RuntimeApi = {
       }[]
     >
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
+    reclaimTerminalIfPhoneIdle: (
+      ptyId: string
+    ) => Promise<{ reclaimed: boolean; retryAfterMs?: number }>
     reclaimBrowserForDesktop: (browserPageId: string) => Promise<{ reclaimed: boolean }>
     onTerminalFitOverrideChanged: (
       callback: (event: {

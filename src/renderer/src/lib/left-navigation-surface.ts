@@ -33,6 +33,35 @@ export function projectSidebarYieldsToPanel({
   )
 }
 
+export type ProjectSidebarRevealState = {
+  sidebarOpen: boolean
+  sidePanelDock: SidePanelDock
+  rightSidebarOpen: boolean
+  activeView: TopLevelView
+  activeWorktreeId: string | null
+  setSidebarOpen: (open: boolean) => void
+  toggleRightSidebar: () => void
+}
+
+/** Shows the project sidebar; returns whether anything changed. Docked left, opening it is not enough while the panel holds the region. */
+export function revealProjectSidebar(state: ProjectSidebarRevealState): boolean {
+  // Why view-aware: on views that unmount the panel, closing it would only discard the saved preference.
+  const panelHoldsRegion = projectSidebarYieldsToPanel({
+    sidePanelDock: state.sidePanelDock,
+    rightSidebarOpen: state.rightSidebarOpen,
+    activeView: state.activeView,
+    hasActiveProject: state.activeWorktreeId !== null
+  })
+  if (state.sidebarOpen && !panelHoldsRegion) {
+    return false
+  }
+  state.setSidebarOpen(true)
+  if (panelHoldsRegion) {
+    state.toggleRightSidebar()
+  }
+  return true
+}
+
 export function resolveEffectiveSidebarOpen({
   sidebarOpen,
   sidePanelDock,

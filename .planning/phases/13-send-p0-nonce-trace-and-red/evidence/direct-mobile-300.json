@@ -1,0 +1,33 @@
+{
+  "scenario": "mobile",
+  "bodyLength": 334,
+  "nonce": "ORCA-NONCE-2d63ef60",
+  "submitGapMs": 516,
+  "admitted": false,
+  "requestUrls": [],
+  "linesWithNonce": [
+    "❯ Reply with ok. ORCA-NONCE-2d63ef60 the phone asks the desktop agent a question the phone asks the desktop agent a     "
+  ],
+  "readyTail": [
+    "▎ https://code.claude.com/docs/en/permission-modes",
+    "                                                                                                    ◐ medium · /effort  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "❯  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
+  ],
+  "afterTail": [
+    " ▝▝   ▝▝   ~\\AppData\\Local\\Temp\\sendp0-h1-NrKkdP\\work",
+    "▎ Auto mode is now Claude Code's default permission mode.",
+    "▎ Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and     ",
+    "▎ prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.",
+    "▎ https://code.claude.com/docs/en/permission-modes",
+    "                                                                                                    ◐ medium · /effort  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "❯ Reply with ok. ORCA-NONCE-2d63ef60 the phone asks the desktop agent a question the phone asks the desktop agent a     ",
+    "  question the phone asks the desktop agent a question the phone asks the desktop agent a question the phone asks the   ",
+    "  desktop agent a question the phone asks the desktop agent a question the phone asks the desktop agent a  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle)"
+  ]
+}

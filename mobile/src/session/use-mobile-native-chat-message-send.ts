@@ -18,6 +18,7 @@ import {
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { mobileNativeChatRefusalMessage } from './mobile-native-chat-send-refusal'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -140,6 +141,11 @@ export function useMobileNativeChatMessageSend(args: {
       // arrived as literal Ctrl+U text and the draft concatenated (see
       // clearMobileNativeChatInput). A rejected clear aborts the send rather
       // than pasting on top of an uncleared line.
+      // The host's refusal code, so the error names the narrowest recovery instead of a bare failure.
+      let refusal: string | null = null
+      const onRefused = (code: string): void => {
+        refusal = code
+      }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       if (seededLaunchDraft && !images?.length) {
         const cleared = await clearMobileNativeChatInput({
@@ -147,6 +153,7 @@ export function useMobileNativeChatMessageSend(args: {
           terminal: handle,
           clearInput: buildAgentTuiClearInputForText(seededLaunchDraft.text),
           deadline,
+          onRefused,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
@@ -155,7 +162,7 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, text)
           }
-          onSendError('Message not sent')
+          onSendError(mobileNativeChatRefusalMessage(refusal))
           return 'rejected'
         }
       }
@@ -187,8 +194,11 @@ export function useMobileNativeChatMessageSend(args: {
               // Why: an image send already cleared before its paste; a second
               // clear here would wipe the image before submission.
               clearInputFirst: !images?.length && !seededLaunchDraft,
+              // Why composer chat only: answers and slash commands must still reach the TUI as keys.
+              asAgentPrompt: syncComposer && classification === 'chat',
               ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
               deadline,
+              onRefused,
               ...(mobileClient ? { mobileClient } : {})
             })
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
@@ -209,7 +219,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (syncComposer) {
           restoreRejectedDraft(origin, text)
         }
-        onSendError('Message not sent')
+        onSendError(mobileNativeChatRefusalMessage(refusal))
         return 'rejected'
       }
       if (classification === 'chat') {

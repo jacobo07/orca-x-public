@@ -147,6 +147,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import { approvePrepareStepInStore } from './prepare-approval'
 import { resolvePageReturnTarget, workspaceReturnTarget } from './page-return-target'
 
 export type PendingSidebarWorktreeReveal = {
@@ -249,7 +250,8 @@ function getContextualTourProgressionForFeatureInteraction(
     state.activeContextualTourId === 'workspace-agent-sessions' &&
     state.activeContextualTourStepIndex === 0 &&
     id === 'terminal-pane-split' &&
-    !state.sidebarOpen
+    // Why: docked left, an open sidebar still yields to an open panel, so it is not shown either.
+    (!state.sidebarOpen || (state.sidePanelDock === 'left' && state.rightSidebarOpen))
   ) {
     return 'reveal-sidebar-and-advance'
   }
@@ -857,6 +859,8 @@ export type UISlice = {
     contentHash: string
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
+  // Resolves only after main acknowledged the write; rejects with state unchanged.
+  approvePrepareStep: (repoId: string, requirementId: string, contentHash: string) => Promise<void>
   clearOrcaHookTrustForRepo: (repoId: string) => void
   setupScriptPromptDismissedRepoIds: readonly string[]
   dismissSetupScriptPrompt: (repoHostIdentity: string) => void
@@ -1719,6 +1723,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return {
           featureInteractions: next,
           sidebarOpen: true,
+          ...(s.sidePanelDock === 'left' ? { rightSidebarOpen: false } : {}),
           activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
         }
       }
@@ -1986,6 +1991,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
       return { trustedOrcaHooks: next }
     }),
+  approvePrepareStep: (repoId, requirementId, contentHash) =>
+    approvePrepareStepInStore(get, set, repoId, requirementId, contentHash),
   clearOrcaHookTrustForRepo: (repoId) =>
     set((s) => {
       if (!(repoId in s.trustedOrcaHooks)) {

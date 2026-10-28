@@ -76,7 +76,8 @@ import {
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
-import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { isPtyLocked, noteDesktopInputRefused } from '@/lib/pane-manager/mobile-driver-state'
+import { askToReclaimTerminalIfPhoneIdle } from './phone-lease-reclaim'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
 import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
@@ -4165,10 +4166,18 @@ export function connectPanePty(
       return
     }
     // Why: presence-lock input drop. While mobile is the driver for this
-    // PTY, desktop keystrokes must not reach the shell; the visible overlay's
-    // explicit Take back action owns restoring desktop input and dimensions.
+    // PTY, desktop keystrokes must not reach the shell; Take back, or this
+    // keystroke once the phone's lease has expired, restores desktop input.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
+      // Focus reports are not the user typing; they must not raise the explanation.
+      if (data !== TERMINAL_FOCUS_IN_SEQUENCE && data !== TERMINAL_FOCUS_OUT_SEQUENCE) {
+        noteDesktopInputRefused(currentPtyId)
+        void askToReclaimTerminalIfPhoneIdle(
+          currentPtyId,
+          getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), deps.worktreeId)
+        )
+      }
       return
     }
     if (

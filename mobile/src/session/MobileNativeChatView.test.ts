@@ -72,6 +72,7 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  onReaderInHistoryChange?: (inHistory: boolean) => void
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -197,11 +198,33 @@ describe('MobileNativeChatView', () => {
 
   it('renders an accepted optimistic image send without a queued state', async () => {
     await render({
-      pending: [{ id: 'pending-1', text: 'look', images: ['file:///phone-photo.jpg'] }]
+      pending: [
+        { id: 'pending-1', delivery: 'written', text: 'look', images: ['file:///phone-photo.jpg'] }
+      ]
     })
 
     expect(listIds()).toEqual(['pending-1'])
     expect(renderedRow('pending-1').props).not.toHaveProperty('queued')
+  })
+
+  it('hands each pending bubble its delivery evidence and transcript turns none', async () => {
+    await render({
+      folded: [assistantTurn('a1', 'earlier')],
+      pending: [{ id: 'pending-1', delivery: 'unconfirmed', text: 'ping' }]
+    })
+
+    expect(renderedRow('pending-1').props.delivery).toBe('unconfirmed')
+    expect(renderedRow('a1').props.delivery).toBeUndefined()
+  })
+
+  it('tells a pending bubble when the chat has no transcript feed', async () => {
+    const pending = [{ id: 'pending-1', delivery: 'unconfirmed' as const, text: 'ping' }]
+    await render({ status: 'ready', pending })
+    expect(renderedRow('pending-1').props.transcriptReadable).toBe(true)
+
+    await update({ status: 'waiting-session', pending })
+
+    expect(renderedRow('pending-1').props.transcriptReadable).toBe(false)
   })
 
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
@@ -240,5 +263,63 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Owner phone, 2026-10-27: scrolled back while the agent streamed, the text slid up one row per
+  // new message (window head trim) and jumped on auto "load earlier" (prepend).
+  describe('viewport ownership', () => {
+    function list(): ReactTestInstance {
+      return renderer!.root.find((node) => node.type === 'FlatList')
+    }
+
+    async function scrollTo(distanceFromBottom: number): Promise<void> {
+      const height = 500
+      const contentHeight = 4000
+      await act(async () => {
+        list().props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: contentHeight - height - distanceFromBottom },
+            contentSize: { height: contentHeight },
+            layoutMeasurement: { height }
+          }
+        })
+      })
+    }
+
+    const folded = [assistantTurn('a1', 'first'), assistantTurn('a2', 'second')]
+
+    it('follows the live edge without anchoring while the reader is at the bottom', async () => {
+      await render({ folded })
+      expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    })
+
+    it('anchors the first visible row once the reader scrolls away from live', async () => {
+      await render({ folded })
+      await scrollTo(600)
+      expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+
+      // A streamed row arriving must not take ownership back.
+      await update({ folded: [...folded, assistantTurn('a3', 'third')] })
+      expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+    })
+
+    it('releases the anchor when the reader returns to the live edge', async () => {
+      await render({ folded })
+      await scrollTo(600)
+      await scrollTo(20)
+      expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    })
+
+    it('tells the session to hold history while the reader is away from live', async () => {
+      const onReaderInHistoryChange = vi.fn()
+      await render({ folded, onReaderInHistoryChange })
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(false)
+
+      await scrollTo(600)
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(true)
+
+      await scrollTo(20)
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(false)
+    })
   })
 })

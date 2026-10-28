@@ -47,7 +47,17 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   // observes the change, and MobileDriverOverlay mounts in loud mode.
   await sendMobileSubscribeIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
+  // A phone taking control is normal remote use: the desktop shows the quiet
+  // corner chip, not the explanation, and nothing on the desktop is required.
   await expect(overlay).toBeVisible({ timeout: 15_000 })
+  await expect(overlay).toContainText(/phone driving/i)
+  await expect(overlay.getByRole('button', { name: /take back/i })).toBeVisible()
+  await expect(overlay).not.toContainText(/your phone is in control/i)
+  await expectChipIsCompactInPane(orcaPage, ptyId)
+
+  await captureAttachment(orcaPage, testInfo, 'overlay-collapsed.png')
+
+  await overlay.getByRole('button', { name: /phone driving/i }).click()
   await expect(overlay).toContainText(/from your phone/i)
   await expect(overlay).toContainText(/your phone is in control/i)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
@@ -60,21 +70,6 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await expect(collapse).toBeVisible()
 
   await captureAttachment(orcaPage, testInfo, 'overlay-loud.png')
-
-  // Click Collapse → loud overlay swaps to the corner chip while the lock stays
-  // engaged. The user can keep watching live mobile output while the chip
-  // remains a one-click escape hatch back to desktop control.
-  await collapse.click()
-  await expect(overlay).toContainText(/phone driving/i)
-  await expect(overlay.getByRole('button', { name: /take back/i })).toBeVisible()
-  await expect(overlay).not.toContainText(/your phone is in control/i)
-  await expectChipIsCompactInPane(orcaPage, ptyId)
-
-  await captureAttachment(orcaPage, testInfo, 'overlay-collapsed.png')
-
-  await overlay.getByRole('button', { name: /phone driving/i }).click()
-  await expect(overlay).toContainText(/your phone is in control/i)
-  await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await collapse.click()
   await expect(overlay).not.toContainText(/your phone is in control/i)

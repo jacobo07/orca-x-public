@@ -1,13 +1,26 @@
-import { Monitor, MoreVertical } from 'lucide-react-native'
+import { Monitor, MoreVertical, Power } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
+import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  presentHostCardAvailability,
+  presentHostCardWake,
+  type HostCardTone,
+  type HostCardWakeInputs
+} from './host-availability-presentation'
 import { StatusDot } from './StatusDot'
+
+const AVAILABILITY_TONE_COLOR: Record<HostCardTone, string> = {
+  normal: colors.textSecondary,
+  muted: colors.textMuted,
+  warning: colors.statusAmber
+}
 
 export function MobileHostCard(props: {
   host: HostProfile | HostCatalogEntry
@@ -18,6 +31,11 @@ export function MobileHostCard(props: {
   // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
   // away (STA-3123 shipped that bug once already).
   worktreeInfo?: HostWorktreeInfo
+  lastConnectedAt?: number | null
+  statusSnapshot?: HomeHostStatusSnapshot
+  // Why props: the session owns broker answers and the attempt; the presenter decides every word.
+  wake?: HostCardWakeInputs
+  onWake?: () => void
   onPress: () => void
   onLongPress: () => void
   onOpenActions: () => void
@@ -56,11 +74,29 @@ export function MobileHostCard(props: {
     : credentialUnavailable
       ? 'Unlock your phone, then tap to retry'
       : null
+  const availability = presentHostCardAvailability({
+    connected,
+    verdictKind: props.verdict.kind,
+    lastConnectedAt: props.lastConnectedAt ?? null,
+    snapshot: props.statusSnapshot,
+    nowMs: Date.now()
+  })
+  const request = presentHostCardWake({
+    targetHostId: props.host.id,
+    wake: props.wake,
+    powerAwake: availability.labelIds.includes('power.awake'),
+    targetSnapshot: props.statusSnapshot,
+    targetLastConnectedAt: props.lastConnectedAt ?? null
+  })
+  const onRequest = props.onWake
+  const showRequestControl = request.showControl && onRequest !== undefined
   const accessibilityLabel = [
     `Open ${props.host.name}`,
     statusLabel,
     connectionPathLabel?.replace(' · ', ' via '),
     connected ? worktreeSummary?.replace(' · ', ', ') : null,
+    availability.accessibilityText,
+    request.stageText,
     discoveryHint,
     credentialHint
   ]
@@ -69,6 +105,7 @@ export function MobileHostCard(props: {
   return (
     <View style={styles.card}>
       <Pressable
+        testID="host-card-open"
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
@@ -105,6 +142,25 @@ export function MobileHostCard(props: {
               {worktreeSummary}
             </Text>
           ) : null}
+          <Text
+            testID="host-card-availability"
+            style={[styles.worktreeMetaText, { color: AVAILABILITY_TONE_COLOR[availability.tone] }]}
+            numberOfLines={1}
+          >
+            {availability.availabilityText}
+          </Text>
+          <Text testID="host-card-capabilities" style={styles.worktreeMetaText} numberOfLines={2}>
+            {availability.capabilityText}
+          </Text>
+          {request.stageText ? (
+            <Text
+              testID="host-card-request-stage"
+              style={[styles.worktreeMetaText, { color: AVAILABILITY_TONE_COLOR[request.tone] }]}
+              numberOfLines={1}
+            >
+              {request.stageText}
+            </Text>
+          ) : null}
           {discoveryHint ? (
             <Text style={styles.discoveryHint} numberOfLines={2}>
               {discoveryHint}
@@ -117,7 +173,26 @@ export function MobileHostCard(props: {
           ) : null}
         </View>
       </Pressable>
+      {showRequestControl ? (
+        // Why a sibling, never inside host-card-open: an effect control owns its own press (D-08).
+        <Pressable
+          testID="host-card-wake"
+          accessibilityRole="button"
+          accessibilityLabel={`Wake ${props.host.name}`}
+          accessibilityState={{ busy: request.busy, disabled: request.busy }}
+          disabled={request.busy}
+          hitSlop={8}
+          style={({ pressed }) => [styles.requestButton, pressed && styles.requestButtonPressed]}
+          onPress={onRequest}
+        >
+          <Power size={14} color={request.busy ? colors.textMuted : colors.textPrimary} />
+          <Text style={[styles.requestText, request.busy && { color: colors.textMuted }]}>
+            Wake
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable
+        testID="host-card-actions"
         accessibilityRole="button"
         accessibilityLabel={`Actions for ${props.host.name}`}
         hitSlop={8}
@@ -131,6 +206,20 @@ export function MobileHostCard(props: {
 }
 
 const styles = StyleSheet.create({
+  requestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginLeft: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised
+  },
+  // Why borderSubtle: the fill is already bgRaised, so pressed steps one surface tier up.
+  requestButtonPressed: { backgroundColor: colors.borderSubtle },
+  requestText: { color: colors.textPrimary, fontSize: 12, fontWeight: '600' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

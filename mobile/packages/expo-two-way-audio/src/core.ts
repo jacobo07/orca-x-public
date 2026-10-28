@@ -1,62 +1,80 @@
 import type { PermissionResponse } from 'expo-modules-core'
 import ExpoTwoWayAudioModule from './ExpoTwoWayAudioModule'
 
+export class ExpoTwoWayAudioUnavailableError extends Error {
+  constructor() {
+    super('Dictation is not available in this app build (native audio module missing).')
+    this.name = 'ExpoTwoWayAudioUnavailableError'
+  }
+}
+
+export function isExpoTwoWayAudioAvailable(): boolean {
+  return ExpoTwoWayAudioModule != null
+}
+
+export function nativeTwoWayAudio() {
+  if (ExpoTwoWayAudioModule == null) {
+    throw new ExpoTwoWayAudioUnavailableError()
+  }
+  return ExpoTwoWayAudioModule
+}
+
 export async function initialize() {
-  return await ExpoTwoWayAudioModule.initialize()
+  return await nativeTwoWayAudio().initialize()
 }
 
 export function playPCMData(audioData: Uint8Array) {
-  return ExpoTwoWayAudioModule.playPCMData(audioData)
+  return nativeTwoWayAudio().playPCMData(audioData)
 }
 
 export function bypassVoiceProcessing(bypass: boolean) {
-  return ExpoTwoWayAudioModule.bypassVoiceProcessing(bypass)
+  return nativeTwoWayAudio().bypassVoiceProcessing(bypass)
 }
 
 export function toggleRecording(val: boolean): boolean {
-  return ExpoTwoWayAudioModule.toggleRecording(val)
+  return nativeTwoWayAudio().toggleRecording(val)
 }
 
 export function isRecording(): boolean {
-  return ExpoTwoWayAudioModule.isRecording()
+  return nativeTwoWayAudio().isRecording()
 }
 
 export function tearDown() {
-  return ExpoTwoWayAudioModule.tearDown()
+  return nativeTwoWayAudio().tearDown()
 }
 
 export function restart() {
-  return ExpoTwoWayAudioModule.restart()
+  return nativeTwoWayAudio().restart()
 }
 
 export async function getMicrophonePermissionsAsync(): Promise<PermissionResponse> {
-  return ExpoTwoWayAudioModule.getMicrophonePermissionsAsync()
+  return nativeTwoWayAudio().getMicrophonePermissionsAsync()
 }
 
 export async function requestMicrophonePermissionsAsync(): Promise<PermissionResponse> {
-  return ExpoTwoWayAudioModule.requestMicrophonePermissionsAsync()
+  return nativeTwoWayAudio().requestMicrophonePermissionsAsync()
 }
 
 export function getMicrophoneModeIOS() {
-  return ExpoTwoWayAudioModule.getMicrophoneModeIOS()
+  return nativeTwoWayAudio().getMicrophoneModeIOS()
 }
 
 export function setMicrophoneModeIOS() {
-  return ExpoTwoWayAudioModule.setMicrophoneModeIOS()
+  return nativeTwoWayAudio().setMicrophoneModeIOS()
 }
 
 export function isPlaying(): boolean {
-  return ExpoTwoWayAudioModule.isPlaying()
+  return nativeTwoWayAudio().isPlaying()
 }
 
 export function stopPlayback() {
-  return ExpoTwoWayAudioModule.stopPlayback()
+  return nativeTwoWayAudio().stopPlayback()
 }
 
 export function pausePlayback() {
-  return ExpoTwoWayAudioModule.pausePlayback()
+  return nativeTwoWayAudio().pausePlayback()
 }
 
 export function resumePlayback() {
-  return ExpoTwoWayAudioModule.resumePlayback()
+  return nativeTwoWayAudio().resumePlayback()
 }

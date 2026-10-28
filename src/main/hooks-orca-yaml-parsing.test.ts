@@ -415,6 +415,26 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
     expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
   })
 
+  it('recognises the requirements key beside scripts', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      'scripts:\n  setup: pnpm install\nrequirements:\n  - { id: git, kind: command, name: git }\n'
+    )
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+
+  it('does not count a requirements-only file as having hooks', async () => {
+    const text = 'requirements:\n  - { id: git, kind: command, name: git }\n'
+    expect(parseOrcaYaml(text)).toBeNull()
+
+    const fs = await import('node:fs')
+    vi.mocked(fs.readFileSync).mockReturnValue(text)
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+
   it('returns false when the file is empty or has no top-level keys', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue('# just a comment\n')

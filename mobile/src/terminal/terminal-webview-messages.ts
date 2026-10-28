@@ -26,3 +26,5 @@ export type TerminalWebViewCommand =
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+  | { type: 'search'; id?: number; query: string; direction: 'next' | 'previous' }
+  | { type: 'search-clear'; id?: number }

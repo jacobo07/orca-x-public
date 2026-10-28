@@ -6,6 +6,7 @@ import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_SEARCH_JS } from './terminal-webview-search-injected'
 import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
@@ -811,6 +812,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
   // reflow(): see terminal-webview-reflow-injected.ts (extracted for max-lines).
   ${TERMINAL_REFLOW_JS}
+  ${TERMINAL_SEARCH_JS}
 
   function notify(msg) {
     if (window.ReactNativeWebView) {
@@ -973,6 +975,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       applyFitScale('reset-zoom-msg');
     } else if (msg.type === 'set-theme') {
       applyTerminalTheme(msg.terminalTheme);
+    } else if (msg.type === 'search') { runSearch(msg.query, msg.direction);
+    } else if (msg.type === 'search-clear') { clearSearch();
     } else if (msg.type === 'cancel-select') {
       if (selMode === 'select') cancelSelect();
     } else if (msg.type === 'do-select-all') {

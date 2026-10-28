@@ -154,6 +154,27 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     return { restored: await boundTerminalFitRestore(pending) }
   })
 
+  ipcMain.removeHandler('runtime:reclaimTerminalIfPhoneIdle')
+  ipcMain.handle(
+    'runtime:reclaimTerminalIfPhoneIdle',
+    async (
+      _event,
+      args: { ptyId: string }
+    ): Promise<{ reclaimed: boolean; retryAfterMs?: number }> => {
+      // Why: an explicit Take back already in flight owns this PTY's reclaim; join it.
+      const pending = pendingTerminalFitRestores.get(args.ptyId)
+      if (pending) {
+        return { reclaimed: await boundTerminalFitRestore(pending) }
+      }
+      try {
+        return await runtime.reclaimTerminalForDesktopIfPhoneIdle(args.ptyId)
+      } catch (error) {
+        console.warn('[runtime] lease reclaim failed', error)
+        return { reclaimed: false }
+      }
+    }
+  )
+
   ipcMain.removeHandler('runtime:reclaimBrowserForDesktop')
   ipcMain.handle(
     'runtime:reclaimBrowserForDesktop',

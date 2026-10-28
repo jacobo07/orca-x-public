@@ -1,5 +1,5 @@
 import type { ConnectConfig } from 'ssh2'
-import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshTarget, SshConnectionState, SshHostKeyPin } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
   findEncryptedPrivateKeyPath,
@@ -15,8 +15,21 @@ export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
 export type SshCredentialKind = 'passphrase' | 'password'
 
+export type SshHostKeyTrustRequest = {
+  host: string
+  port: number
+  fingerprint: string
+  algorithm?: string
+  publicKeyBase64?: string
+}
+
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
+  /** Interactive attempts only. The owner persists (flushed) any pin it returns before resolving. */
+  onHostKeyTrustRequest?: (
+    targetId: string,
+    request: SshHostKeyTrustRequest
+  ) => Promise<SshHostKeyPin | null>
   onCredentialRequest?: (
     targetId: string,
     kind: SshCredentialKind,
@@ -156,6 +169,8 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
 export type SshExecOptions = {
   wrapCommand?: boolean
   signal?: AbortSignal
+  // Why: only the system-transport probe that becomes the ControlMaster asks ssh to log the host key it verified.
+  observeHostKey?: boolean
 }
 
 export function createSshOperationAbortError(): Error & { name: string } {
@@ -217,7 +232,10 @@ export function buildConnectConfig(
   return config as ConnectConfig
 }
 
-function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+export function resolveEffectiveHost(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): string {
   if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
     return resolved.hostname
   }
@@ -227,7 +245,10 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
   return target.host || resolved?.hostname || target.label
 }
 
-function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+export function resolveEffectivePort(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): number {
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.port || target.port || 22
   }

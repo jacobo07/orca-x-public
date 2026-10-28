@@ -1,5 +1,5 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
@@ -83,6 +83,8 @@ export function serveOrcaApp(
     mobilePairing?: boolean
     recipeJson?: boolean
     projectRoot?: string | null
+    bindHost?: string | null
+    wakeBroker?: boolean
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -100,11 +102,17 @@ export function serveOrcaApp(
   if (args.pairingAddress) {
     childArgs.push('--serve-pairing-address', args.pairingAddress)
   }
+  if (args.bindHost) {
+    childArgs.push('--serve-bind-host', args.bindHost)
+  }
   if (args.noPairing) {
     childArgs.push('--serve-no-pairing')
   }
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
+  }
+  if (args.wakeBroker) {
+    childArgs.push('--serve-wake-broker')
   }
   if (args.recipeJson) {
     if (!args.projectRoot) {
@@ -256,8 +264,25 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
   })
 }
 
-function getExecutableAppArgs(): string[] {
-  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+export type ServeLaunchTarget = {
+  executable: string
+  appArgs: string[]
+  workingDirectory: string
+}
+
+// Why: a logon task must start the same executable and app root that foreground `orca serve` spawns.
+export function resolveServeLaunchTarget(env: NodeJS.ProcessEnv = process.env): ServeLaunchTarget {
+  const executable = resolveForegroundOrcaExecutable(env)
+  const appArgs = getExecutableAppArgs(env)
+  return {
+    executable,
+    appArgs,
+    workingDirectory: appArgs.length > 0 ? resolveAppRoot() : dirname(executable)
+  }
+}
+
+function getExecutableAppArgs(env: NodeJS.ProcessEnv = process.env): string[] {
+  return env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
 }
 
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
@@ -271,12 +296,12 @@ function resolveAppRoot(): string {
   return resolve(__dirname, '../../..')
 }
 
-function resolveForegroundOrcaExecutable(): string {
-  const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
+function resolveForegroundOrcaExecutable(env: NodeJS.ProcessEnv = process.env): string {
+  const overrideExecutable = env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     return overrideExecutable
   }
-  if (process.env.ELECTRON_RUN_AS_NODE === '1') {
+  if (env.ELECTRON_RUN_AS_NODE === '1') {
     return process.execPath
   }
   throw new RuntimeClientError(

@@ -7,6 +7,8 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { EnvironmentRequirementsMeasurement } from '../../../shared/environment-requirements-measurement'
+import { unwrapRuntimeRpcResult } from '../runtime/runtime-rpc-result'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
@@ -863,7 +865,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       save: () => Promise.resolve({ status: 'unavailable' as const }),
       list: () => Promise.resolve({ status: 'unavailable' as const }),
       read: () => Promise.resolve({ status: 'unavailable' as const }),
-      probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const })
+      probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const }),
+      transferContinueSessions: () => Promise.resolve({ status: 'unavailable' as const })
     },
     // Why explicit: the fallback would answer with an empty desk; a web client holds no desk at all.
     continuity: {
@@ -885,6 +888,30 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onParkPhaseRequest: () => () => {},
       respondParkPhase: () => {},
       onParkFromMenu: () => () => {}
+    },
+    // Why explicit: the web client has no local host; the active runtime owns the repo and answers.
+    environment: {
+      measureRequirements: async ({ repoId }) =>
+        unwrapRuntimeRpcResult(
+          await callRuntimeEnvelope<EnvironmentRequirementsMeasurement>(
+            'environment.measureRequirements',
+            { repo: `id:${repoId}` },
+            60_000
+          )
+        ),
+      runPrepareStep: async ({ repoId, requirementId, approvedContentHash, approvedHostKey }) =>
+        unwrapRuntimeRpcResult(
+          await callRuntimeEnvelope(
+            'environment.runPrepareStep',
+            { repo: `id:${repoId}`, requirementId, approvedContentHash, approvedHostKey },
+            60_000
+          )
+        )
+    },
+    // Why: the web client has no local host, and the pair service spends this desktop's SSH credentials.
+    replicaPair: {
+      compare: async () => ({ status: 'refused', reason: 'remote-caller' }),
+      relations: async () => ({ status: 'refused', reason: 'remote-caller' })
     },
     cache: {
       getGitHub: () =>
@@ -1483,6 +1510,7 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     getTerminalDrivers: () => Promise.resolve([]),
     getBrowserDrivers: () => Promise.resolve([]),
     restoreTerminalFit: () => Promise.resolve({ restored: false }),
+    reclaimTerminalIfPhoneIdle: () => Promise.resolve({ reclaimed: false }),
     reclaimBrowserForDesktop: () => Promise.resolve({ reclaimed: false }),
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
     onTerminalDriverChanged: () => noopUnsubscribe,

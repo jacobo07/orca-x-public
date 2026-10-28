@@ -11,6 +11,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { judgeMobileDriverLease } from '../../shared/mobile-driver-lease'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import {
@@ -634,6 +635,7 @@ import {
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import { wakeBrokerRuntimeCapabilities } from './wake-broker-host'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions
@@ -1195,6 +1197,7 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { detectGitHubAvatarIcon, detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
+import { linkRepoToRootProject } from '../project-root-identity-link'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -1214,6 +1217,16 @@ import {
 } from '../speech/speech-model-deletion'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
+import {
+  measureEnvironmentRequirements,
+  type EnvironmentRequirementsMeasurement
+} from '../environment-requirement-measurement'
+import { createEnvironmentPrepareDeps } from './environment-prepare-runtime-deps'
+import {
+  runEnvironmentPrepareStep,
+  type RunEnvironmentPrepareStepArgs,
+  type RunEnvironmentPrepareStepResult
+} from './environment-prepare-step-runner'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -1516,6 +1529,8 @@ type RuntimePtyWorktreeRecord = {
 
 type TerminalCreateOptions = {
   command?: string
+  // Why: the approved prepare bytes run as typed; set only by the prepare runner, never from RPC params.
+  rawCommand?: true
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
@@ -2008,6 +2023,28 @@ const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 function isClientDisconnectedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'client_disconnected'
+}
+
+// Why: the caller stops waiting on a disconnect; the effect it started keeps running to its own end.
+function rejectWhenCallerDisconnects<T>(
+  effect: Promise<T>,
+  signal: AbortSignal | undefined,
+  abandonable: Promise<void>
+): Promise<T> {
+  if (!signal) {
+    return effect
+  }
+  return new Promise<T>((resolve, reject) => {
+    const gone = new Promise<void>((done) => {
+      if (signal.aborted) {
+        done()
+      } else {
+        signal.addEventListener('abort', () => done(), { once: true })
+      }
+    })
+    void Promise.all([gone, abandonable]).then(() => reject(new Error('client_disconnected')))
+    effect.then(resolve, reject)
+  })
 }
 
 function createTerminalRevealWarning(handle: string, error?: unknown): string {
@@ -5962,6 +5999,8 @@ export class OrcaRuntimeService {
     if (this.conversationHost !== null) {
       capabilities.push(CONVERSATIONS_RUNTIME_CAPABILITY)
     }
+    // Why: advertised only while this process is a broker (D-12).
+    capabilities.push(...wakeBrokerRuntimeCapabilities())
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
@@ -15823,6 +15862,27 @@ export class OrcaRuntimeService {
     return false
   }
 
+  // Why: a desktop keystroke the lock dropped asks this; a phone that has only watched for the
+  // whole lease loses the terminal, the same way Take back takes it. See docs/mobile-presence-lock.md.
+  async reclaimTerminalForDesktopIfPhoneIdle(
+    ptyId: string
+  ): Promise<{ reclaimed: boolean; retryAfterMs?: number }> {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const verdict = judgeMobileDriverLease({
+      driverIsMobile: this.getDriver(ptyId).kind === 'mobile',
+      phoneLastActedAts: inner ? Array.from(inner.values(), (sub) => sub.lastActedAt) : [],
+      phoneInputPending: (this.mobileInputFloorClaims.get(ptyId)?.pending.size ?? 0) > 0,
+      now: Date.now()
+    })
+    if (verdict.kind === 'active') {
+      return { reclaimed: false, retryAfterMs: verdict.remainingMs }
+    }
+    if (verdict.kind === 'not-applicable') {
+      return { reclaimed: false }
+    }
+    return { reclaimed: await this.reclaimTerminalForDesktop(ptyId) }
+  }
+
   // Why: the shared "banner must be gone now" step for an explicit desktop
   // take-back. Releases the presence lock (driver → desktop) and, if the
   // best-effort resize left a fit-override held (resize didn't converge),
@@ -19834,12 +19894,16 @@ export class OrcaRuntimeService {
     )
   }
 
-  private completeProjectHostSetup(
+  private async completeProjectHostSetup(
     args: ProjectHostSetupExistingFolderArgs,
     initialRepo: Repo,
     repoWasCreated: boolean
-  ): ProjectHostSetupResult {
+  ): Promise<ProjectHostSetupResult> {
     try {
+      // Why: a git-root id is proven on the target host, never inferred from the request.
+      if (this.store) {
+        await linkRepoToRootProject(this.store, initialRepo, args.projectId)
+      }
       return this.linkRepoToProjectHostSetup(args, initialRepo)
     } catch (err) {
       if (repoWasCreated) {
@@ -20665,6 +20729,35 @@ export class OrcaRuntimeService {
 
   async showRepo(repoSelector: string): Promise<Repo> {
     return await this.resolveRepoSelector(repoSelector)
+  }
+
+  async measureEnvironmentRequirements(
+    repoSelector: string
+  ): Promise<EnvironmentRequirementsMeasurement> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return measureEnvironmentRequirements(repo, {
+      userDataPath: app.getPath('userData'),
+      projectRuntime: repo.connectionId
+        ? undefined
+        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+    })
+  }
+
+  // The one effect boundary for prepare commands: desktop IPC and the launch RPC both end here.
+  async runEnvironmentPrepareStep(
+    args: RunEnvironmentPrepareStepArgs
+  ): Promise<RunEnvironmentPrepareStepResult> {
+    const store = this.requireStore()
+    return runEnvironmentPrepareStep(
+      args,
+      createEnvironmentPrepareDeps({
+        resolveRepo: (selector) => this.resolveRepoSelector(selector),
+        getTrustedOrcaHooks: () => store.getUI().trustedOrcaHooks,
+        createTerminal: (selector, options) => this.createTerminal(selector, options),
+        userDataPath: app.getPath('userData'),
+        projectRuntimeFor: (repo) => resolveLocalProjectRuntimeForRepo(store, repo)
+      })
+    )
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
@@ -26713,6 +26806,7 @@ export class OrcaRuntimeService {
     // Why: raw shell commands like `codex exec` must remain user-authored shell.
     // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
     const callerSuppliedLaunch =
+      opts.rawCommand ||
       opts.env ||
       opts.launchConfig ||
       opts.launchAgent ||
@@ -26915,7 +27009,7 @@ export class OrcaRuntimeService {
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
-      !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', _caller.signal))
+      !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume'))
     ) {
       // Why: the renderer still holds the exact old request and may retry it before any side effect.
       throw new Error('agent_session_legacy_required')
@@ -26971,9 +27065,6 @@ export class OrcaRuntimeService {
     if (resumeCwd.status === 'outside-workspace') {
       throw new Error('agent_session_resume_context_unauthorized')
     }
-    if (_caller.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
       env: startup.env,
@@ -26992,8 +27083,7 @@ export class OrcaRuntimeService {
       agentSessionResumeSubject: {
         agent: request.agent,
         providerSession: request.providerSession
-      },
-      signal: _caller.signal
+      }
     })
     return {
       terminal,
@@ -27071,13 +27161,7 @@ export class OrcaRuntimeService {
       // Why: reserve the client operation before any async preflight so concurrent retries cannot
       // both observe an empty ledger and reach the execution owner independently.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-      if (
-        !(await this.executionOwnerSupportsAgentSessionOperation(
-          workspace,
-          'create',
-          caller.signal
-        ))
-      ) {
+      if (!(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'create'))) {
         // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
         throw new Error('agent_session_legacy_required')
       }
@@ -27150,9 +27234,6 @@ export class OrcaRuntimeService {
       } else {
         this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
       }
-      if (caller.signal?.aborted) {
-        throw new Error('client_disconnected')
-      }
       let terminal: RuntimeTerminalCreate
       const executionOperationId = createHash('sha256')
         .update(this.runtimeId)
@@ -27181,7 +27262,6 @@ export class OrcaRuntimeService {
           viewMode: request.viewMode,
           persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
-          signal: caller.signal,
           onPtySpawnCommitted: () => {
             retainReplayFence = true
           }
@@ -27867,14 +27947,26 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
+    // Why: Detach — the create runs to completion without the caller; only delivery of its result is lost.
+    const { signal: callerSignal, ...detachedOpts } = opts
+    let markRendererOwned = (): void => {}
+    // Why: only a renderer-owned create has a wait the caller can abandon; a headless create just finishes.
+    const rendererOwned = new Promise<void>((resolve) => {
+      markRendererOwned = resolve
+    })
     const runOpts = {
-      ...opts,
-      activate: select && navigationTargetsHost(navigation)
+      ...detachedOpts,
+      activate: select && navigationTargetsHost(navigation),
+      onRendererOwned: markRendererOwned
     }
     const mutationId = opts.clientMutationId
     let result: RuntimeMobileSessionCreateTerminalResult
     if (!mutationId) {
-      result = await this.runCreateMobileSessionTerminal(worktreeSelector, runOpts)
+      result = await rejectWhenCallerDisconnects(
+        this.runCreateMobileSessionTerminal(worktreeSelector, runOpts),
+        callerSignal,
+        rendererOwned
+      )
     } else {
       // Why: idempotency is caller-owned; two paired devices may reuse the same mutation id without sharing a result.
       const mutationKey = `${opts.clientNavigationId ?? 'local'}\0${worktreeSelector}\0${mutationId}`
@@ -27896,7 +27988,7 @@ export class OrcaRuntimeService {
           setTimeout(drop, MOBILE_TERMINAL_CREATE_RESULT_TTL_MS).unref?.()
         }, drop)
       }
-      result = await run
+      result = await rejectWhenCallerDisconnects(run, callerSignal, rendererOwned)
     }
     if (select) {
       const worktreeId =
@@ -27930,7 +28022,7 @@ export class OrcaRuntimeService {
       activate?: boolean
       clientNavigationId?: string
       clientMutationId?: string
-      signal?: AbortSignal
+      onRendererOwned?: () => void
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const pairedCreate = Boolean(opts.clientNavigationId)
@@ -27950,9 +28042,6 @@ export class OrcaRuntimeService {
     }
     const startupCommand = await this.resolveMobileSessionTerminalCommand(workspace, opts)
     this.assertStableReadyGraph(graphEpoch, worktreeId)
-    if (opts.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
@@ -27968,8 +28057,7 @@ export class OrcaRuntimeService {
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
-          launchConfig: startupCommand.launchConfig,
-          signal: opts.signal
+          launchConfig: startupCommand.launchConfig
         }
       )
     }
@@ -27979,21 +28067,14 @@ export class OrcaRuntimeService {
     const releasePublicationThrottle = pairedCreate
       ? this.rendererPublicationThrottle.acquire(win.webContents)
       : () => {}
+    opts.onRendererOwned?.()
     try {
       const requestId = randomUUID()
       const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
           reject(new Error('Terminal creation timed out'))
         }, 10_000)
-        // Why: a dead client connection cancels the wait; the renderer tab (and
-        // its shell) stays alive for the host and mirrors on reconnect (#7718).
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          ipcMain.removeListener('terminal:tabCreateReply', handler)
-          reject(new Error('client_disconnected'))
-        }
 
         const handler = (
           event: Electron.IpcMainEvent,
@@ -28004,14 +28085,12 @@ export class OrcaRuntimeService {
           }
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
           if (r.error) {
             reject(new Error(r.error))
           } else {
             resolve({ tabId: r.tabId!, title: r.title ?? '' })
           }
         }
-        opts.signal?.addEventListener('abort', onAbort, { once: true })
         ipcMain.on('terminal:tabCreateReply', handler)
         win.webContents.send('terminal:requestTabCreate', {
           requestId,
@@ -28054,8 +28133,7 @@ export class OrcaRuntimeService {
         // wait resolves without depending on a graph sync.
         this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
         const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
-          timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-          signal: opts.signal
+          timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
@@ -28063,16 +28141,11 @@ export class OrcaRuntimeService {
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
           timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
-          requireReady: true,
-          signal: opts.signal
+          requireReady: true
         }).catch(() => null)
         if (readySurface) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           return readySurface
-        }
-        if (opts.signal?.aborted) {
-          // Why: nobody awaits this create anymore; don't materialize or roll back — the renderer's own publication settles the tab.
-          throw new Error('client_disconnected')
         }
         const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
         if (!pendingSurface) {
@@ -28093,8 +28166,7 @@ export class OrcaRuntimeService {
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
-            launchConfig: startupCommand.launchConfig,
-            signal: opts.signal
+            launchConfig: startupCommand.launchConfig
           }
         )
       } catch (error) {
@@ -28223,7 +28295,6 @@ export class OrcaRuntimeService {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
-      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -28254,8 +28325,7 @@ export class OrcaRuntimeService {
       ...(isNewSession ? { isNewSession: true } : {}),
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
-      deferMobileSessionPublish: true,
-      signal: opts.signal
+      deferMobileSessionPublish: true
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {

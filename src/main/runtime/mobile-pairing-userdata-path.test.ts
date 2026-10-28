@@ -121,7 +121,11 @@ describe('mobile pairing userData path stability', () => {
 
     writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), JSON.stringify([]))
     migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)
-    expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(lateDevices)
+    // Why: the registry above rewrote the raw token as its digest (D2), so assert the pairing survived, not the bytes.
+    const canonical = JSON.parse(
+      readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')
+    )
+    expect(canonical.map((device: { deviceId: string }) => device.deviceId)).toEqual(['late-phone'])
   })
 
   it('skips legacy migration when only part of the canonical credential pair exists', async () => {

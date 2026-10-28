@@ -25,30 +25,47 @@ export function isValidMobileE2EEAuthVersion(
   )
 }
 
+type MobileE2EEAuthFailureCode = 'bad_auth' | 'unauthorized'
+
+export type MobileE2EEAuthFailure = {
+  ok: false
+  code: MobileE2EEAuthFailureCode
+  /** The e2ee_error payload. `reason` is a new optional field: old phones read only `code` and keep retrying. */
+  error: { code: MobileE2EEAuthFailureCode; reason?: 'device_revoked' }
+}
+
+function refuse(code: MobileE2EEAuthFailureCode, reason?: 'device_revoked'): MobileE2EEAuthFailure {
+  return { ok: false, code, error: reason ? { code, reason } : { code } }
+}
+
 export function authenticateMobileE2EE<TDevice extends { deviceToken: string }>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   resolveDevice: (token: string) => TDevice | null
-}):
-  | { ok: true; device: TDevice; auth: MobileE2EEAuth }
-  | { ok: false; code: 'bad_auth' | 'unauthorized' } {
+  isRevokedToken?: (token: string) => boolean
+}): { ok: true; device: TDevice; auth: MobileE2EEAuth } | MobileE2EEAuthFailure {
   let auth: MobileE2EEAuth
   try {
     auth = parseRemoteRuntimeJsonText(args.plaintext) as MobileE2EEAuth
   } catch {
-    return { ok: false, code: 'bad_auth' }
+    return refuse('bad_auth')
   }
   if (
     auth.type !== 'e2ee_auth' ||
     !auth.deviceToken ||
     !isValidMobileE2EEAuthVersion(auth, args.v2Session)
   ) {
-    return { ok: false, code: 'bad_auth' }
+    return refuse('bad_auth')
   }
   const device = args.resolveDevice(auth.deviceToken)
-  return device?.deviceToken === auth.deviceToken
-    ? { ok: true, device, auth }
-    : { ok: false, code: 'unauthorized' }
+  if (device?.deviceToken === auth.deviceToken) {
+    return { ok: true, device, auth }
+  }
+  // Why: the holder of a revoked token learns nothing new by hearing so, and can stop retrying.
+  return refuse(
+    'unauthorized',
+    args.isRevokedToken?.(auth.deviceToken) ? 'device_revoked' : undefined
+  )
 }
 
 export function decodeMobileE2EEPublicKey(value: string): Uint8Array | null {

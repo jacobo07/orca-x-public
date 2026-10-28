@@ -233,34 +233,34 @@ describe('repo catalog refresh identity', () => {
   it('keeps a project owned only through a repo on another host', async () => {
     // Why: no setup row names this project, so the refreshing host can only be ruled out from the
     // project's own source repos. Feeding the host-id resolvers anything but this project's repo
-    // slice prunes it on a local refresh.
-    const sshRepo: Repo = { ...secondRepo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
-    mockRepos(repo, sshRepo)
+    // slice prunes it on a local refresh. A runtime host: the local catalog owns direct-SSH rows.
+    const runtimeRepo: Repo = { ...secondRepo, executionHostId: 'runtime:env-a' }
+    mockRepos(repo, runtimeRepo)
     const store = createTestStore()
     await store.getState().fetchRepos()
-    const sshOwned: Project = {
-      id: 'ssh-owned',
-      displayName: 'SSH Owned',
+    const runtimeOwned: Project = {
+      id: 'runtime-owned',
+      displayName: 'Runtime Owned',
       badgeColor: '#000000',
-      sourceRepoIds: [sshRepo.id],
+      sourceRepoIds: [runtimeRepo.id],
       createdAt: 1,
       updatedAt: 1
     }
     store.setState({
-      projects: [...store.getState().projects, sshOwned],
+      projects: [...store.getState().projects, runtimeOwned],
       projectHostSetups: []
     })
 
     await store.getState().fetchRepos()
 
-    expect(store.getState().projects.map((project) => project.id)).toContain('ssh-owned')
+    expect(store.getState().projects.map((project) => project.id)).toContain('runtime-owned')
   })
 
   it('keeps a project whose repo id is cloned onto a second host', async () => {
     // Why: both rows share `repo.id`, so the project's repo slice must carry every duplicate —
     // keeping only the first drops the remote host and the local refresh prunes the project.
-    const sshRepo: Repo = { ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
-    mockRepos(repo, sshRepo)
+    const runtimeRepo: Repo = { ...repo, executionHostId: 'runtime:env-a' }
+    mockRepos(repo, runtimeRepo)
     const store = createTestStore()
     await store.getState().fetchRepos()
     const dualHostOwned: Project = {

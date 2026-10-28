@@ -26,9 +26,9 @@ export type Agent = {
    *
    * This is a DERIVED REPLACEABLE identity, not a minted one: `getProjectIdentityKey` promotes
    * `repo:` → `git:` → `github:` as a remote probe learns more, mid-session. So agents are
-   * remapped inside `rebuildRepoBackedProjectState`, beside `projectHostSetups`, and nowhere else
-   * — the succession map is computed per read and discarded, so a dependent that misses that
-   * moment can never catch up later.
+   * remapped by `remapAgentProjectIds` wherever the succession map is computed (the store's live
+   * sync, its load path and `rebuildRepoBackedProjectState`) — the map is discarded after each
+   * read, so a dependent that misses that moment can never catch up later.
    */
   projectId: string | null
   createdAt: number

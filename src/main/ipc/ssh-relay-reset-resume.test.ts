@@ -275,7 +275,7 @@ describe('SSH IPC handlers', () => {
 
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
     expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { interactive: true })
   })
 
   it('ssh:resetRelay reuses duplicate in-flight resets for the same target', async () => {

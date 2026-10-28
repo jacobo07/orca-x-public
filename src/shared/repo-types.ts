@@ -3,6 +3,7 @@ import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
+import type { GitRootIdentity, GitRootIdentityNoneReason } from './git-root-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
 
@@ -72,6 +73,10 @@ export type Repo = {
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
   gitRemoteIdentity?: GitRemoteIdentity | null
+  /** undefined = not probed or host unreachable; null = git answered, no usable root. */
+  gitRootIdentity?: GitRootIdentity | null
+  /** Why `gitRootIdentity` is null; only ever set beside a settled null. */
+  gitRootIdentityNoneReason?: GitRootIdentityNoneReason
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */

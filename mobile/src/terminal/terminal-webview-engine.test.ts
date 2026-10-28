@@ -130,7 +130,8 @@ describe('terminal WebView bundled engine', () => {
     expect(window).toMatchObject({
       Terminal: expect.any(Function),
       Unicode11Addon: { Unicode11Addon: expect.any(Function) },
-      WebglAddon: { WebglAddon: expect.any(Function) }
+      WebglAddon: { WebglAddon: expect.any(Function) },
+      SearchAddon: { SearchAddon: expect.any(Function) }
     })
 
     const weakRef = window.WeakRef as (new (target: unknown) => { deref(): unknown }) | undefined
@@ -233,6 +234,15 @@ describe('terminal WebView bundled engine', () => {
     expect(harness.applyTerminalTheme).toHaveBeenCalledWith(harness.terminalThemeInput)
     expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(harness.term.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('assembles find-in-scrollback into the document and routes its messages', () => {
+    expect(XTERM_HTML).toContain('function runSearch(query, direction)')
+    expect(XTERM_HTML).toContain('function clearSearch()')
+    expect(terminalHtmlSource).toContain(
+      "} else if (msg.type === 'search') { runSearch(msg.query, msg.direction);"
+    )
+    expect(terminalHtmlSource).toContain("} else if (msg.type === 'search-clear') { clearSearch();")
   })
 
   it('answers native readiness probes from the live document', () => {

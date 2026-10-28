@@ -533,7 +533,8 @@ function getTaskPageRepoSourceContext(
   if (!repo) {
     return null
   }
-  const projection = projectHostSetupProjectionFromRepos([repo])
+  // Why: one repo cannot decide root identity (it depends on the repos not shown): the conservative repo: id.
+  const projection = projectHostSetupProjectionFromRepos([repo], undefined, { identityContext: [] })
   const project = projection.projects[0]
   const setup = projection.setups[0]
   const providerIdentity =

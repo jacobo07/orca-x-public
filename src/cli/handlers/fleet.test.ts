@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { FleetPlacementViewResult } from '../../shared/fleet-placement-view'
 import { fleetPlacementExitCode, formatFleetPlacementView } from '../fleet-placement-format'
-import { fleetPlacementParams } from './fleet'
+import { parseArgs, validateCommandAndFlags } from '../args'
+import { COMMAND_SPECS } from '../specs'
+import { FLEET_HANDLERS, fleetManifestParams, fleetPlacementParams } from './fleet'
 
 const GB = 1024 ** 3
 const candidate = (key: string, label: string, availableMemory: number) => ({
@@ -69,9 +71,78 @@ describe('orca fleet placement', () => {
     })
   })
 
+  it('adds the VRAM and disk need as a strict requirement beside the legacy memory field', () => {
+    const MB = 1024 * 1024
+    expect(
+      fleetPlacementParams(
+        new Map<string, string | boolean>([
+          ['min-vram-mb', '8192'],
+          ['min-disk-mb', '2048']
+        ])
+      )
+    ).toStrictEqual({
+      requirement: { vram: { minFreeBytes: 8192 * MB }, disk: { minAvailableBytes: 2048 * MB } }
+    })
+    const both = fleetPlacementParams(
+      new Map<string, string | boolean>([
+        ['min-available-mb', '4096'],
+        ['min-vram-mb', '8192']
+      ])
+    )
+    expect(both).toStrictEqual({
+      minAvailableBytes: 4 * GB,
+      requirement: { vram: { minFreeBytes: 8192 * MB } }
+    })
+    expect(both.requirement).not.toHaveProperty('memory')
+    expect(
+      fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', '4096']]))
+    ).toStrictEqual({ minAvailableBytes: 4 * GB })
+  })
+
+  it('rejects a bad VRAM or disk figure instead of sending a guess', () => {
+    for (const [flag, value] of [
+      ['min-vram-mb', '0'],
+      ['min-vram-mb', 'x'],
+      ['min-disk-mb', '2.5'],
+      ['min-disk-mb', '']
+    ]) {
+      expect(() =>
+        fleetPlacementParams(new Map<string, string | boolean>([[flag, value]]))
+      ).toThrow(new RegExp(`--${flag}`))
+    }
+  })
+
+  it('accepts the new flags in the placement spec and still refuses unknown ones', () => {
+    const accepted = parseArgs([
+      'fleet',
+      'placement',
+      '--min-vram-mb',
+      '8192',
+      '--min-disk-mb',
+      '5'
+    ])
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, accepted)).not.toThrow()
+    const refused = parseArgs(['fleet', 'placement', '--min-gpu-mb', '5'])
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, refused)).toThrow(
+      /Unknown flag --min-gpu-mb/
+    )
+  })
+
   it('rejects a non-integer memory floor instead of sending a guess', () => {
     expect(() =>
       fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', '1.5']]))
+    ).toThrow(/min-available-mb/)
+  })
+
+  it('refuses a memory floor that is not plain decimal or overflows the byte range', () => {
+    const tooMany = String(Math.floor(Number.MAX_SAFE_INTEGER / (1024 * 1024)) + 1)
+    for (const value of ['0x10', '1e3', '1e308', tooMany, '+5', '-5', '']) {
+      expect(() =>
+        fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', value]]))
+      ).toThrow(/min-available-mb/)
+    }
+    expect(() =>
+      fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', true]]))
     ).toThrow(/min-available-mb/)
   })
 
@@ -103,5 +174,70 @@ describe('orca fleet placement', () => {
     expect(refused).toContain('refused')
     expect(unavailable).toContain('no fleet reader')
     expect(refused).not.toBe(unavailable)
+  })
+})
+
+describe('orca fleet manifest', () => {
+  const flagsOf = (entries: [string, string | boolean][]) => new Map(entries)
+
+  it('maps --model-probe-ports to params and sends nothing when absent', () => {
+    expect(fleetManifestParams(new Map())).toEqual({})
+    expect(fleetManifestParams(flagsOf([['model-probe-ports', '8081, 8082']]))).toEqual({
+      modelProbePorts: [8081, 8082]
+    })
+  })
+
+  it('rejects a non-integer, an out-of-range port and more than four ports before any RPC', () => {
+    for (const bad of ['80.5', 'abc', '65536', '0', '1,2,3,4,5', '8081,']) {
+      expect(() => fleetManifestParams(flagsOf([['model-probe-ports', bad]]))).toThrow(
+        /model-probe-ports/
+      )
+    }
+  })
+
+  async function run(result: unknown, entries: [string, string | boolean][] = []) {
+    const calls: { method: string; params: unknown }[] = []
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push({ method, params })
+        return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
+      }
+    }
+    const lines: string[] = []
+    const original = console.log
+    console.log = (...args: unknown[]) => void lines.push(args.join(' '))
+    const previousExit = process.exitCode
+    try {
+      await FLEET_HANDLERS['fleet manifest']({
+        client: client as never,
+        flags: flagsOf(entries),
+        cwd: '.',
+        json: entries.some(([name]) => name === 'json')
+      })
+      const exitCode = process.exitCode
+      return { calls, lines, exitCode }
+    } finally {
+      console.log = original
+      process.exitCode = previousExit
+    }
+  }
+
+  it('calls only fleet.nodeManifests, sets the exit code, and prints the RPC result with --json', async () => {
+    const okResult = { status: 'ok', observedAt: 1, manifests: [] }
+    const printed = await run(okResult, [
+      ['json', true],
+      ['model-probe-ports', '8081']
+    ])
+    expect(printed.calls).toEqual([
+      { method: 'fleet.nodeManifests', params: { modelProbePorts: [8081] } }
+    ])
+    expect(printed.exitCode).toBe(0)
+    expect(JSON.parse(printed.lines.join('\n')).result).toEqual(okResult)
+    const refused = await run({ status: 'refused', reason: 'remote-caller' })
+    expect(refused.exitCode).toBe(1)
+    expect(refused.lines.join('\n')).toContain('refused')
+    expect(
+      printed.calls.concat(refused.calls).some((c) => c.method === 'fleet.placementView')
+    ).toBe(false)
   })
 })

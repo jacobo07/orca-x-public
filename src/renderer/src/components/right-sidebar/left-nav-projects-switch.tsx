@@ -1,6 +1,7 @@
 import { FolderGit2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { revealProjectSidebar } from '@/lib/left-navigation-surface'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
@@ -27,8 +28,6 @@ export function isProjectsTheLeftSurface(sidebarOpen: boolean, rightSidebarOpen:
 export function LeftNavProjectsSwitch(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
-  const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
 
   const active = isProjectsTheLeftSurface(sidebarOpen, rightSidebarOpen)
   const label = translate('components.right.sidebar.leftNavProjectsSwitch.projects', 'Projects')
@@ -46,13 +45,7 @@ export function LeftNavProjectsSwitch(): React.JSX.Element {
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
-          onClick={() => {
-            // Show projects: the sidebar has to be open and the panel has to give up the space.
-            setSidebarOpen(true)
-            if (rightSidebarOpen) {
-              toggleRightSidebar()
-            }
-          }}
+          onClick={() => revealProjectSidebar(useAppStore.getState())}
         >
           <FolderGit2 size={18} />
           {active ? (

@@ -6,6 +6,7 @@ import {
 } from './helpers/golden-stub-agent'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { focusActiveTerminalInput, getTerminalContent } from './helpers/terminal'
+import { showTerminalTabStrip } from './helpers/terminal-tab-strip'
 
 test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
 
@@ -15,6 +16,7 @@ test('launches an agent TUI with a live multiline composer', async ({ orcaPage }
   await ensureTerminalVisible(orcaPage)
   await configureGoldenStubAgent(orcaPage)
   await launchGoldenStubAgentFromNewTab(orcaPage)
+  await showTerminalTabStrip(orcaPage)
 
   const activeTab = orcaPage.locator('[data-testid="sortable-tab"][data-active="true"]')
   await expect(activeTab).toHaveAttribute('data-tab-title', /Codex|Golden Stub Agent/i)

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
+import { assertDeviceStillAuthorized } from '../device-authorization'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
@@ -57,10 +58,14 @@ type MobileSocketWiringOptions = {
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
-function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
+// Why: the token the client just proved, not the stored one: at rest a paired device keeps only its digest.
+function toAuthenticatedDevice(
+  device: DeviceEntry,
+  presentedToken: string
+): E2EEAuthenticatedDevice {
   return {
     deviceId: device.deviceId,
-    deviceToken: device.token,
+    deviceToken: presentedToken,
     scope: device.scope
   }
 }
@@ -148,17 +153,19 @@ export class MobileSocketWiring {
             : { transport: 'direct' },
         requireV2: metadata.transport === 'relay',
         outboundMemoryBudget: this.outboundMemoryBudget,
+        isRevokedToken: (token) => this.deviceRegistry.isRevokedToken(token),
         resolveAuthenticatedDevice: (token) => {
-          const device = this.deviceRegistry.validateToken(token)
-          if (!device) {
+          const authorization = assertDeviceStillAuthorized(this.deviceRegistry, token)
+          if (!authorization.ok) {
             return null
           }
+          const device = authorization.device
           // Why: outer relay authorization cannot choose the local Orca
           // identity; E2EE must resolve the same device before readiness.
           if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
             return null
           }
-          return toAuthenticatedDevice(device)
+          return toAuthenticatedDevice(device, token)
         },
         onReady: (channel, device) => {
           const socket = {

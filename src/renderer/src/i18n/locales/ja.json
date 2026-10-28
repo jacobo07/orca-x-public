@@ -10,6 +10,55 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "ここで続行",
+      "running": "続行中…",
+      "targetLabel": "続行先",
+      "targetPlaceholder": "ホストを選択",
+      "source": {
+        "uncommittedChanges": "このワークスペースには未コミットの変更があり、それらは引き継がれません。先にコミットまたは stash してください。何も変更していません。",
+        "statusUnknown": "このワークスペースに未コミットの変更があるか確認できなかったため、何も続行していません。もう一度お試しください。"
+      },
+      "result": {
+        "restored": "もう一方のホストに復元しました。何も起動していません。タブは開いたときにだけ起動します。",
+        "restoredEmpty": "復元しましたが、このスナップショットには開くターミナルがありません。",
+        "restoredUnlisted": "復元しましたが、各タブの動作を一覧にできませんでした。",
+        "hostUnverified": "そのホストはまだ確認できていないため、何も復元していません。接続後にもう一度お試しください。",
+        "inFlight": "そのワークスペースへの別の復元がまだ完了していません。"
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "このワークスペースのセットアップは、続行するプロジェクトと一致しません。",
+        "targetSetupProjectMismatch": "そのホストのセットアップは別のプロジェクトのものです。",
+        "targetSetupMissing": "このプロジェクトはそのホストにまだセットアップされていません。",
+        "targetSetupNotReady": "そのホストでのこのプロジェクトのセットアップはまだ準備できていません。",
+        "sameHost": "このスナップショットはすでにそのホストのものです。",
+        "sourceHostMismatch": "このスナップショットは、このワークスペースのセットアップとは別のホストで保存されました。",
+        "locationOutsideSourceSetup": "このワークスペースはプロジェクトのフォルダーの外にあるため、そのホストに対応する場所がありません。",
+        "locationKindUnsupported": "別のホストで続行できるのはプロジェクトのワークツリーだけで、通常のフォルダーはできません。",
+        "startupCwdOutsideSourceSetup": "このスナップショットのターミナルがプロジェクトのフォルダーの外で起動していたため、そのホストでは対応付けられません。"
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "まだセットアップされていません。そのホストのこのワークスペースは、このクライアントで開かれていません。何も変更していません。",
+        "sourceSetupMissing": "このワークスペース自身のセットアップが見つからないため、他のホストで続行できません。"
+      },
+      "pane": {
+        "label": "ターミナル {{number}}",
+        "disposition": {
+          "resume": "エージェントのセッションを再開します",
+          "restart": "そのフォルダーで新しいターミナルを起動します",
+          "unavailable": "そこでは開けません"
+        },
+        "reason": {
+          "providerSessionPresent": "エージェントのセッションがそのホストにあります。",
+          "relaunchable": "保存された起動設定からもう一度起動できます。",
+          "hostUnavailable": "そのホストを利用できません。",
+          "hostUnverified": "そのホストはまだ確認できていません。",
+          "liveElsewhere": "別の場所で開いています。",
+          "notConfirmed": "そこでセッションを確認できませんでした。",
+          "nothingRunnable": "実行できるものがありません。"
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "復元済み・未実行",
       "sleptTitle": "スリープ中・未実行",
@@ -6821,6 +6870,36 @@
           "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
           "hostStateDisconnected": "切断済み",
           "hostStateUnknown": "不明",
+          "relationTerm": "関係",
+          "relationUnverified": "関係は未検証",
+          "relationSame": "同じコミット",
+          "relationAhead": "ローカルのコピーが {{value0}} 件先行",
+          "relationBehind": "ローカルのコピーが {{value0}} 件遅れ",
+          "relationDiverged": "ローカルのコピーと分岐 (+{{value0}}/-{{value1}})",
+          "relationUnrelated": "無関係な履歴",
+          "relationAheadUncounted": "ローカルのコピーが先行",
+          "relationBehindUncounted": "ローカルのコピーが遅れ",
+          "relationDivergedUncounted": "ローカルのコピーと分岐",
+          "relationReasonHostUnreachable": "ホストに接続できません",
+          "relationReasonTipUnknown": "現在のコミットを読み取れませんでした",
+          "relationReasonUnborn": "まだコミットがありません",
+          "relationReasonRelayTooOld": "リモートの Orca ヘルパーが古すぎて比較できません",
+          "relationReasonTransportUnsupportedHost": "この種類のホストでは比較に対応していません",
+          "relationReasonNoComparisonSite": "比較対象のローカルコピーがありません",
+          "relationReasonBundleTooLarge": "変更が大きすぎて比較できません",
+          "relationReasonBundleVerifyFailed": "比較データの検証に失敗しました",
+          "relationReasonBundleHeadsMismatch": "比較データがコピーと一致しませんでした",
+          "relationReasonTransferInterrupted": "比較が中断されました",
+          "relationReasonShallow": "シャロークローン: 履歴が不完全です",
+          "relationReasonEvidenceStale": "比較後にコピーが変更されました",
+          "relationReasonNotCompared": "まだ比較していません",
+          "relationReasonNotAGitRepo": "フォルダーのワークスペース: Git リポジトリではありません",
+          "relationReasonWorktreeNotVerifiedClean": "同じコミットですが、作業ツリーがクリーンであることは確認されていません",
+          "compareAction": "レプリカを比較",
+          "comparing": "比較中…",
+          "pairUnavailableRemote": "このクライアントからはレプリカの比較を利用できません",
+          "pairUnavailableNoService": "レプリカの比較を利用できません。レプリカサービスが実行されていません",
+          "pairFailed": "レプリカを比較できませんでした。比較が成功するまで、関係は未検証のままです",
           "nestedHostLabel": "{{value1}} 経由の {{value0}}",
           "externalWorktrees": "外部ワークツリー",
           "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",

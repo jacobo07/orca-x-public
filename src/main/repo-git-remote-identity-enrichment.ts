@@ -1,5 +1,6 @@
 import type { Repo } from '../shared/repo-types'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
+import { enrichMissingRepoGitRootIdentities } from './repo-git-root-identity-enrichment'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
 // Why 6h: a resolved identity only changes when a remote is added or the project is renamed or
@@ -16,7 +17,13 @@ const MAX_IDENTITY_REFRESHES_PER_SWEEP = 4
 type RepoIdentityStore = {
   getRepos(): Repo[]
   getRepo?(id: string): Repo | undefined
-  updateRepo(id: string, updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>): Repo | null
+  updateRepo(
+    id: string,
+    updates: Pick<
+      Partial<Repo>,
+      'gitRemoteIdentity' | 'gitRootIdentity' | 'gitRootIdentityNoneReason'
+    >
+  ): Repo | null
 }
 
 type EnrichmentOptions = {
@@ -185,6 +192,8 @@ export function enrichMissingRepoGitRemoteIdentities(
   store: RepoIdentityStore,
   options: EnrichmentOptions = {}
 ): void {
+  // Why: both sweeps share the list-call triggers; the root sweep never owns a timer.
+  enrichMissingRepoGitRootIdentities(store, options)
   void enrichMissingRepoGitRemoteIdentitiesInBackground(store, options).catch((error: unknown) => {
     console.error('[repo-identity] Failed to enrich git remote identities:', error)
   })

@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:orca:schema:node-manifest:1",
+  "title": "Orca node manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "observed_at", "node", "measurements"],
+  "properties": {
+    "schema": { "const": "orca.node-manifest/1" },
+    "observed_at": { "$ref": "#/$defs/epoch_ms" },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "label", "fingerprint", "runtime_id", "platform", "capabilities"],
+      "properties": {
+        "address": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "fingerprint": { "type": ["string", "null"] },
+        "runtime_id": { "type": ["string", "null"] },
+        "platform": { "type": ["string", "null"] },
+        "capabilities": { "type": ["array", "null"], "items": { "type": "string" } }
+      }
+    },
+    "known_heads": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memory", "disk", "vram", "resident_model"],
+      "properties": {
+        "memory": {
+          "oneOf": [
+            { "$ref": "#/$defs/memory_measured" },
+            { "$ref": "#/$defs/unknown_measurement" }
+          ]
+        },
+        "disk": {
+          "oneOf": [{ "$ref": "#/$defs/disk_measured" }, { "$ref": "#/$defs/unknown_measurement" }]
+        },
+        "vram": {
+          "oneOf": [{ "$ref": "#/$defs/vram_measured" }, { "$ref": "#/$defs/unknown_measurement" }]
+        },
+        "resident_model": {
+          "oneOf": [{ "$ref": "#/$defs/model_measured" }, { "$ref": "#/$defs/unknown_measurement" }]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "epoch_ms": { "type": "integer", "minimum": 0 },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "unknown_measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "const": "unknown" },
+        "reason": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string" }
+      }
+    },
+    "memory_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "measured_at", "max_age_ms", "source"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_bytes", "available_bytes", "available_source"],
+          "properties": {
+            "total_bytes": { "$ref": "#/$defs/bytes" },
+            "available_bytes": { "$ref": "#/$defs/bytes" },
+            "available_source": { "type": "string", "minLength": 1 }
+          }
+        },
+        "measured_at": { "$ref": "#/$defs/epoch_ms" },
+        "max_age_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "disk_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "measured_at", "max_age_ms", "source"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filesystems"],
+          "properties": {
+            "filesystems": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "total_bytes", "available_bytes"],
+                "properties": {
+                  "path": { "type": "string", "minLength": 1 },
+                  "total_bytes": { "$ref": "#/$defs/bytes" },
+                  "available_bytes": { "$ref": "#/$defs/bytes" }
+                }
+              }
+            }
+          }
+        },
+        "measured_at": { "$ref": "#/$defs/epoch_ms" },
+        "max_age_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "vram_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "measured_at", "max_age_ms", "source"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gpus"],
+          "properties": {
+            "gpus": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "total_bytes", "free_bytes"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "total_bytes": { "$ref": "#/$defs/bytes" },
+                  "free_bytes": { "$ref": "#/$defs/bytes" }
+                }
+              }
+            }
+          }
+        },
+        "measured_at": { "$ref": "#/$defs/epoch_ms" },
+        "max_age_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "model_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "measured_at", "max_age_ms", "source"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoints", "unanswered_ports"],
+          "properties": {
+            "endpoints": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["port", "model_ids"],
+                "properties": {
+                  "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                  "model_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            },
+            "unanswered_ports": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+            }
+          }
+        },
+        "measured_at": { "$ref": "#/$defs/epoch_ms" },
+        "max_age_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

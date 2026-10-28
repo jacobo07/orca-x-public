@@ -11,6 +11,9 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
 
 import { workspaceConsentKey } from '../workspace-execution-consent'
+import { prepareApprovalHash } from '../../shared/environment-prepare-plan'
+import { nodePrepareSha256Hex } from '../../shared/environment-prepare-node-hash'
+import { runEnvironmentPrepareStep } from './environment-prepare-step-runner'
 import { ipcMain } from 'electron'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -13826,6 +13829,77 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  // Why: an approved prepare command is exact text. A prepare that equals a bare agent launch must
+  // reach the PTY unchanged and must not reach the folder-trust producer.
+  it.each(['claude', 'codex'] as const)(
+    'spawns an approved `prepare: %s` as the literal bytes through the real createTerminal',
+    async (agent) => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-prepare' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: { [agent]: '--dangerously-skip-permissions' },
+          agentDefaultEnv: { [agent]: { PREPARE_LEAK: 'yes' } }
+        })
+      })
+      const internal = runtime as unknown as {
+        markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
+      }
+      internal.markLocalWorkspaceTrustedForAgent = vi.fn()
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const hostKey = 'local@0123456789abcdef'
+      const text = `requirements:\n  - id: login\n    kind: command\n    name: ${agent}\n    prepare: ${JSON.stringify(agent)}\n`
+      const file = {
+        state: 'read' as const,
+        text,
+        contentHash: createHash('sha256').update(text).digest('hex')
+      }
+      const hash = await prepareApprovalHash('login', hostKey, agent, nodePrepareSha256Hex)
+
+      const result = await runEnvironmentPrepareStep(
+        {
+          repoSelector: 'id:repo-1',
+          requirementId: 'login',
+          approvedContentHash: hash,
+          approvedHostKey: hostKey,
+          origin: 'runtime-rpc'
+        },
+        {
+          resolveRepo: async () => ({
+            id: TEST_REPO_ID,
+            path: TEST_WORKTREE_PATH,
+            connectionId: null
+          }),
+          hostKeyFor: () => hostKey,
+          readContract: async () => file,
+          measureRequirement: async () => 'missing',
+          readHostIdentity: async () => 'local',
+          readPersistedApproval: () => ({ status: 'absent' }),
+          workspaceSelector: () => `path:${TEST_WORKTREE_PATH}`,
+          createTerminal: (selector, options) => runtime.createTerminal(selector, options),
+          sha256Hex: nodePrepareSha256Hex
+        }
+      )
+
+      expect(result.status).toBe('started')
+      const spawnCall = spawn.mock.calls[0]?.[0] as
+        | { command?: string; env?: Record<string, string> }
+        | undefined
+      expect(spawnCall?.command).toBe(agent)
+      expect(spawnCall?.env?.PREPARE_LEAK).toBeUndefined()
+      expect(internal.markLocalWorkspaceTrustedForAgent).not.toHaveBeenCalled()
+      expect(markCodexProjectTrustedMock).not.toHaveBeenCalled()
+    }
+  )
+
   // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
   // the CLI Orca can host (issue #11926).
   it('launches the configured agent CLI for a startupAgent id, not the raw id', async () => {
@@ -25809,6 +25883,61 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it.each([
+    ['idle Claude auto-title', '✳ Prueba sintetica de Orca X'],
+    ['glyph-less topic title', 'Prueba sintetica de Orca X']
+  ])(
+    'keeps the hook session on a worked pane whose title becomes the %s',
+    async (_label, idleTitle) => {
+      // Phase 19: a phone-started Claude tab showed no turns; the phone subscribes only once
+      // agentStatus carries providerSession.
+      const paneKey = makePaneKey('phone-tab', HEADLESS_LEAF_ID)
+      const providerSession = {
+        key: 'session_id' as const,
+        id: '5e0c3f1a-9b7d-4c2e-8a61-0d4f2b9e7c13',
+        transcriptPath: '/transcripts/5e0c3f1a.jsonl'
+      }
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey,
+            state: 'done',
+            prompt: 'ORCA-NONCE-19',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            tabId: 'phone-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            providerSession
+          }
+        ]
+      })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-phone' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'phone-tab',
+        leafId: HEADLESS_LEAF_ID,
+        title: 'Terminal'
+      })
+      runtime.onPtyData('pty-phone', '\x1b]0;⠂ Claude Code\x07', 100)
+      runtime.onPtyData('pty-phone', `\x1b]0;${idleTitle}\x07`, 200)
+
+      const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(result.tabs[0]).toEqual(
+        expect.objectContaining({
+          type: 'terminal',
+          agentStatus: expect.objectContaining({ providerSession })
+        })
+      )
+    }
+  )
+
   it('reads a resume-identity-only row the live-agent snapshot filters out', async () => {
     // Pi publishes its session separately from status, and the shared getter drops
     // those rows so they can't read as running agents — leaving native chat with no
@@ -28185,7 +28314,7 @@ describe('OrcaRuntimeService', () => {
     expect(setBackgroundThrottling).not.toHaveBeenCalled()
   })
 
-  it('cancels a paired renderer-owned create before publication when its client disconnects', async () => {
+  it('a paired renderer-owned create still reaches the renderer after its client disconnects; only the wait ends', async () => {
     const spawn = vi.fn()
     const send = vi.fn()
     const setBackgroundThrottling = vi.fn()
@@ -28199,21 +28328,73 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
-    })
+    const webContents = { isDestroyed: () => false, send, setBackgroundThrottling }
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false, webContents })
     abort.abort()
 
-    await expect(
-      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        clientNavigationId: 'device-a',
-        signal: abort.signal
-      })
-    ).rejects.toThrow('client_disconnected')
-    expect(spawn).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    expect(setBackgroundThrottling).not.toHaveBeenCalled()
+    // Why: a missing already-aborted guard would run down the 10 s reply timeout; race so it fails loudly.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('waited for the create timeout')), 2_000)
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      await expect(
+        Promise.race([
+          runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+            clientNavigationId: 'device-a',
+            signal: abort.signal
+          }),
+          timeout
+        ])
+      ).rejects.toThrow('client_disconnected')
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      expect(send.mock.calls[0][0]).toBe('terminal:requestTabCreate')
+      // Why: the renderer owns that spawn; the host never spawns on this path.
+      expect(spawn).not.toHaveBeenCalled()
+      // Why: the throttle must stay held until the create's own bookkeeping ends, not when the caller leaves.
+      expect(setBackgroundThrottling).not.toHaveBeenCalledWith(true)
+
+      // The renderer replies after the caller is gone: the create still registers as if the caller were present.
+      const requestId = (send.mock.calls[0][1] as { requestId: string }).requestId
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId, tabId: 'tab-detached', title: 'Terminal' }
+      )
+      const pending = (
+        runtime as unknown as { pendingMobileTerminalCreatesByKey: Map<string, unknown> }
+      ).pendingMobileTerminalCreatesByKey
+      await vi.waitFor(() => expect(pending.has(`${TEST_WORKTREE_ID}::tab-detached`)).toBe(true))
+      expect(setBackgroundThrottling).not.toHaveBeenCalledWith(true)
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(pending.size).toBe(0)
+      expect(setBackgroundThrottling).toHaveBeenCalledWith(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a headless runtime-owned create spawns even when its client already disconnected', async () => {
+    const spawn = vi.fn(async () => ({ id: 'pty-headless-detached' }))
+    const abort = new AbortController()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    abort.abort()
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      clientNavigationId: 'device-a',
+      signal: abort.signal
+    })
+
+    expect(created.tab.type).toBe('terminal')
+    expect(spawn).toHaveBeenCalledTimes(1)
   })
 
   it('selects a created terminal only for the paired caller', async () => {

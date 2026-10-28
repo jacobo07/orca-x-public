@@ -14,6 +14,7 @@ import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
 import { FLEET_METHODS } from './fleet'
+import { PROJECT_REPLICA_METHODS } from './project-replica'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
@@ -43,13 +44,21 @@ import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
 import { DURABLE_EXIT_METHODS } from './durable-exit'
+import { WORKSTREAM_CANCEL_METHODS } from './workstream-cancel'
+import { ENVIRONMENT_REQUIREMENTS_METHODS } from './environment-requirements'
+import { HOST_WAKE_METHODS } from './host-wake'
+import { HOST_WAKE_ADMIN_METHODS } from './host-wake-admin'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
 export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATUS_METHODS,
+  ...HOST_WAKE_METHODS,
+  ...HOST_WAKE_ADMIN_METHODS,
   ...DURABLE_EXIT_METHODS,
+  ...WORKSTREAM_CANCEL_METHODS,
+  ...ENVIRONMENT_REQUIREMENTS_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
@@ -66,6 +75,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATS_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...FLEET_METHODS,
+  ...PROJECT_REPLICA_METHODS,
   ...ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,

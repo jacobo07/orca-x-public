@@ -106,6 +106,10 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { listEnvironments, resolveEnvironment } from '../shared/runtime-environment-store'
 import { installFleetObservation } from './fleet/fleet-observation-slot'
+import { createReplicaPairService } from './replica-pair-service'
+import { installReplicaPairService } from './replica-pair-service-slot'
+import { measureNodeResources } from './fleet/node-resources-measure'
+import { installNodeResourcesMeasurer, readNodeResources } from './fleet/node-resources-slot'
 import { readE2EEPublicKey } from './runtime/e2ee-keypair'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -114,9 +118,18 @@ import {
   showRuntimeRpcStartupFailureDialog
 } from './runtime/runtime-rpc-startup-failure'
 import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
-import { ServeReadinessPublisher } from './server/serve-readiness'
+import { ServeReadinessPublisher, type ServeRelayReadiness } from './server/serve-readiness'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
-import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import type { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import { createHostRelayOwner, type HostRelayStartDeps } from './runtime/relay/host-relay-startup'
+import { hostAvailabilityProducer } from './runtime/host-availability-producer'
+import {
+  createHostAutostartProbe,
+  defaultHostAutostartProbeDeps
+} from './runtime/host-autostart-probe'
+import { createHostOobProbe, defaultHostOobProbeDeps } from './runtime/host-oob-probe'
+import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
+import { formatWakeBrokerServeLine, startWakeBroker } from './runtime/wake-broker-host'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -163,7 +176,12 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
-import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
+import {
+  argvRequestsServeMode,
+  normalizeServeModeArgv,
+  readServeBindHostArg
+} from './startup/serve-mode-argv'
+import { readLocalInterfaceAddresses, resolveServeBindPolicy } from './startup/serve-bind-policy'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -202,10 +220,10 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  resolveLockHeldExitCode,
   shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock,
-  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
+  shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
@@ -333,7 +351,13 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown } from './ipc/ssh'
+import {
+  beginSshShutdown,
+  listSshHostIdentities,
+  listSshTargetsForFleet,
+  readPinnedSshHostKeyFingerprint,
+  requestSshRelayStatus
+} from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -413,6 +437,14 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
+// Why module scope: serve and desktop must share one memoized relay start per process.
+const hostRelayOwner = createHostRelayOwner()
+// Why module scope: serve and desktop registrations share one single-flight Task Scheduler read.
+const hostAutostartProbe = createHostAutostartProbe(defaultHostAutostartProbeDeps())
+// Why module scope: serve and desktop registrations share one single-flight adapter read.
+const hostWolProbe = createHostWolProbe(defaultHostWolProbeDeps())
+// Why module scope: serve and desktop registrations share one single-flight CPU and MEI read.
+const hostOobProbe = createHostOobProbe(defaultHostOobProbeDeps())
 let pendingUnpairedDeviceAuthFailure = false
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -870,7 +902,7 @@ if (!hasSingleInstanceLock) {
   // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
   logSingleInstanceLockFailure()
   // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
-  app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+  app.exit(resolveLockHeldExitCode(process.argv))
 }
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
@@ -1995,6 +2027,9 @@ type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  // DWS-P2 (CTX-EXP-1): pins the WS listener host, outranking exposeNetworkByDefault.
+  bindHost: string | null
+  wakeBroker: boolean
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -2022,7 +2057,9 @@ function getServeOptions(argv = process.argv): ServeOptions {
     noPairing: argv.includes('--serve-no-pairing'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
+    projectRoot: valueAfter('--serve-project-root'),
+    bindHost: readServeBindHostArg(argv, '--serve-bind-host'),
+    wakeBroker: argv.includes('--serve-wake-broker')
   }
 }
 
@@ -2051,7 +2088,24 @@ async function renderTerminalPairingQr(pairingUrl: string): Promise<string | nul
   }
 }
 
-async function printServeReady(options: ServeOptions): Promise<void> {
+function hostRelayStartDeps(): HostRelayStartDeps {
+  if (!runtimeRpc) {
+    throw new Error('runtime_rpc_unavailable')
+  }
+  return {
+    cloudAuth: getOrcaCloudAuthConfig(),
+    userDataPath: getProfileUserDataPath(),
+    appVersion: app.getVersion(),
+    runtimeRpc,
+    onStatus: (status) => {
+      desktopRelayStatus = status
+      mainWindow?.webContents.send('mobile:relayStatusChanged', status)
+    },
+    onResume: (listener) => powerMonitor.on('resume', listener)
+  }
+}
+
+async function printServeReady(options: ServeOptions, relay: ServeRelayReadiness): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
@@ -2093,6 +2147,8 @@ async function printServeReady(options: ServeOptions): Promise<void> {
       advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
       // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
       managedWslCliReconciliation: managedWslCliReconciliationStatus,
+      appVersion: app.getVersion(),
+      relay,
       pairing: pairing.available
         ? {
             available: true,
@@ -2794,19 +2850,38 @@ void app.whenReady().then(async () => {
     readLocalPublicKey: () => readE2EEPublicKey(getCanonicalUserDataPath()),
     getLocalStatus: () => runtimeService.getStatus(),
     collectLocalSnapshot: () => runtimeService.getMemorySnapshot(),
+    collectLocalNodeResources: (options) =>
+      readNodeResources(
+        options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {}
+      ),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
-    callEnvironment: ({ environmentId, method, pairingRevision, timeoutMs, signal }) =>
+    listSshHostIdentities,
+    listSshTargets: listSshTargetsForFleet,
+    callSshRelay: ({ targetId, method, timeoutMs, signal }) =>
+      requestSshRelayStatus({ targetId, method, timeoutMs, signal }),
+    readPinnedSshHostKeyFingerprint,
+    callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
         environmentId,
         method,
-        undefined,
+        params,
         timeoutMs,
         pairingRevision,
         undefined,
         { signal }
       )
   })
+  // Why: the SSH relay session lives only in this process, so `orca serve` leaves the replica slot empty.
+  installReplicaPairService(
+    createReplicaPairService({
+      listProjectHostSetups: () => runtimeService.listProjectHostSetups()
+    })
+  )
+  // Why: the node's userData is where its work lands, so it is the disk the manifest describes.
+  installNodeResourcesMeasurer((params) =>
+    measureNodeResources({ ...params, dataPath: app.getPath('userData') })
+  )
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
@@ -3237,8 +3312,14 @@ void app.whenReady().then(async () => {
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
     // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
-    // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
-    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    // E2E keeps the wide bind its harness connects over. `orca serve` binds what it advertises (D1).
+    ...(serveOptions
+      ? resolveServeBindPolicy({
+          bindHost: serveOptions.bindHost,
+          pairingAddress: serveOptions.pairingAddress,
+          localAddresses: readLocalInterfaceAddresses()
+        })
+      : { exposeNetworkByDefault: isE2E }),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -3325,6 +3406,33 @@ void app.whenReady().then(async () => {
     })
     settleServeDesktopActivation()
     installServeSignalHandlers()
+    // Why: a headless host with no window is only reachable off-LAN through the relay.
+    const serveHostRelay = hostRelayOwner.start(hostRelayStartDeps())
+    desktopRelayService = serveHostRelay.service
+    hostAvailabilityProducer.register({
+      processKind: 'serve',
+      relayReadiness: serveHostRelay.getReadiness,
+      webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
+      autostart: hostAutostartProbe,
+      wakeOnLan: hostWolProbe,
+      oob: hostOobProbe
+    })
+    // Why: start the first Task Scheduler read before a phone asks.
+    hostAutostartProbe.read()
+    // Why: start the first adapter read before a phone asks (D-03).
+    hostWolProbe.read()
+    // Why: start the first CPU and MEI read before a phone asks (D-07).
+    hostOobProbe.read()
+    // Why: the wake broker is an explicit role, never a default (D-04).
+    if (serveOptions.wakeBroker) {
+      const wakeBrokerLine = formatWakeBrokerServeLine(startWakeBroker(getCanonicalUserDataPath()))
+      // Why stderr in machine modes: --serve-json and recipe output on stdout must stay unchanged.
+      if (serveOptions.json || serveOptions.recipeJson) {
+        console.error(wakeBrokerLine)
+      } else {
+        console.log(wakeBrokerLine)
+      }
+    }
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
@@ -3366,7 +3474,7 @@ void app.whenReady().then(async () => {
     // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
     // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
     scheduleAllPendingHistoryTreeRemovals()
-    await printServeReady(serveOptions)
+    await printServeReady(serveOptions, serveHostRelay.getReadiness())
     return
   }
 
@@ -3418,38 +3526,22 @@ void app.whenReady().then(async () => {
     }
   }
 
-  const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: (status) => {
-          desktopRelayStatus = status
-          mainWindow?.webContents.send('mobile:relayStatusChanged', status)
-        }
-      })
-      desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
+  const hostRelay = hostRelayOwner.start(hostRelayStartDeps())
+  desktopRelayService = hostRelay.service
+  hostAvailabilityProducer.register({
+    processKind: 'desktop',
+    relayReadiness: hostRelay.getReadiness,
+    webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
+    autostart: hostAutostartProbe,
+    wakeOnLan: hostWolProbe,
+    oob: hostOobProbe
+  })
+  // Why: start the first Task Scheduler read before a phone asks.
+  hostAutostartProbe.read()
+  // Why: start the first adapter read before a phone asks (D-03).
+  hostWolProbe.read()
+  // Why: start the first CPU and MEI read before a phone asks (D-07).
+  hostOobProbe.read()
 
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {

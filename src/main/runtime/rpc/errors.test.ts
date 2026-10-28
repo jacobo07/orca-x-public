@@ -5,6 +5,11 @@ import {
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ArtifactSharingDisabledError
 } from '../../../shared/artifact-sharing-gate'
+import {
+  STOP_EXECUTION_REFUSAL_CODES,
+  UWCP_CONTROL_CONTRACT,
+  WORKSTREAM_AUTHORITY_UNAVAILABLE
+} from '../../../shared/execution-effect-refusals'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -201,6 +206,40 @@ describe('mapRuntimeError', () => {
       },
       _meta: { runtimeId: 'runtime-1' }
     })
+  })
+})
+
+describe('Stop Execution and Cancel Workstream refusal codes', () => {
+  it.each(STOP_EXECUTION_REFUSAL_CODES)(
+    'Stop refusal %s reaches the wire with its own code and an unchanged message',
+    (code) => {
+      // Structured transport code is thrown with .code; the rest are plain Errors keyed by message.
+      const thrown = new Error(code)
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, thrown)).toMatchObject({
+        ok: false,
+        error: { code, message: code }
+      })
+    }
+  )
+
+  it('Cancel refusal keeps its code and names its authority in data', () => {
+    const error = Object.assign(new Error(WORKSTREAM_AUTHORITY_UNAVAILABLE), {
+      code: WORKSTREAM_AUTHORITY_UNAVAILABLE,
+      data: { authority: UWCP_CONTROL_CONTRACT }
+    })
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'workstream_authority_unavailable',
+        data: { authority: 'uwcp.control/1' }
+      }
+    })
+  })
+
+  it('leaves client_disconnected as a generic runtime_error (Stop/Cancel change nothing here)', () => {
+    expect(
+      mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error('client_disconnected'))
+    ).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
   })
 })
 

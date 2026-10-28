@@ -1,0 +1,163 @@
+{
+  "local": {
+    "pass": 12,
+    "total": 12,
+    "pass_rate": 1.0,
+    "latency_s_median": 2.31,
+    "rows": [
+      {
+        "task": "rev_words",
+        "pass": true,
+        "latency_s": 1.02,
+        "completion_tokens": 21
+      },
+      {
+        "task": "is_pal",
+        "pass": true,
+        "latency_s": 1.08,
+        "completion_tokens": 35
+      },
+      {
+        "task": "fib",
+        "pass": true,
+        "latency_s": 1.55,
+        "completion_tokens": 59
+      },
+      {
+        "task": "flatten",
+        "pass": true,
+        "latency_s": 1.21,
+        "completion_tokens": 45
+      },
+      {
+        "task": "merge_iv",
+        "pass": true,
+        "latency_s": 3.29,
+        "completion_tokens": 139
+      },
+      {
+        "task": "roman",
+        "pass": true,
+        "latency_s": 4.33,
+        "completion_tokens": 190
+      },
+      {
+        "task": "anagram_groups",
+        "pass": true,
+        "latency_s": 2.35,
+        "completion_tokens": 92
+      },
+      {
+        "task": "balanced",
+        "pass": true,
+        "latency_s": 2.31,
+        "completion_tokens": 83
+      },
+      {
+        "task": "lcs",
+        "pass": true,
+        "latency_s": 3.31,
+        "completion_tokens": 138
+      },
+      {
+        "task": "gcd_list",
+        "pass": true,
+        "latency_s": 1.58,
+        "completion_tokens": 63
+      },
+      {
+        "task": "rle",
+        "pass": true,
+        "latency_s": 2.31,
+        "completion_tokens": 97
+      },
+      {
+        "task": "topo",
+        "pass": true,
+        "latency_s": 3.33,
+        "completion_tokens": 151
+      }
+    ]
+  },
+  "claude": {
+    "pass": 12,
+    "total": 12,
+    "pass_rate": 1.0,
+    "latency_s_median": 79.24,
+    "rows": [
+      {
+        "task": "rev_words",
+        "pass": true,
+        "latency_s": 78.34,
+        "completion_tokens": 0
+      },
+      {
+        "task": "is_pal",
+        "pass": true,
+        "latency_s": 78.45,
+        "completion_tokens": 0
+      },
+      {
+        "task": "fib",
+        "pass": true,
+        "latency_s": 78.42,
+        "completion_tokens": 0
+      },
+      {
+        "task": "flatten",
+        "pass": true,
+        "latency_s": 79.65,
+        "completion_tokens": 0
+      },
+      {
+        "task": "merge_iv",
+        "pass": true,
+        "latency_s": 98.39,
+        "completion_tokens": 0
+      },
+      {
+        "task": "roman",
+        "pass": true,
+        "latency_s": 79.27,
+        "completion_tokens": 0
+      },
+      {
+        "task": "anagram_groups",
+        "pass": true,
+        "latency_s": 78.78,
+        "completion_tokens": 0
+      },
+      {
+        "task": "balanced",
+        "pass": true,
+        "latency_s": 79.12,
+        "completion_tokens": 0
+      },
+      {
+        "task": "lcs",
+        "pass": true,
+        "latency_s": 79.35,
+        "completion_tokens": 0
+      },
+      {
+        "task": "gcd_list",
+        "pass": true,
+        "latency_s": 78.63,
+        "completion_tokens": 0
+      },
+      {
+        "task": "rle",
+        "pass": true,
+        "latency_s": 79.24,
+        "completion_tokens": 0
+      },
+      {
+        "task": "topo",
+        "pass": true,
+        "latency_s": 80.06,
+        "completion_tokens": 0
+      }
+    ]
+  },
+  "at": "2026-10-18T17:27:36+0200"
+}

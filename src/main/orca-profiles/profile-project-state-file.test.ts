@@ -152,4 +152,41 @@ describe('rebuildRepoBackedProjectState', () => {
       'cloud-project'
     ])
   })
+
+  it('moves the agents and worktrees of every predecessor of a git-root project', () => {
+    const rootCommit = 'a'.repeat(40)
+    const rootId = `git-root:${rootCommit}`
+    const rooted = (id: string, overrides: Partial<Repo> = {}): Repo =>
+      makeRepo({
+        id,
+        path: `/srv/${id}`,
+        gitRemoteIdentity: null,
+        gitRootIdentity: { rootCommit, commonDir: `/srv/${id}/.git`, shallow: false },
+        ...overrides
+      })
+    const agent = (id: string, projectId: string | null) => ({
+      id,
+      name: id,
+      role: '',
+      projectId,
+      createdAt: 1,
+      updatedAt: 1
+    })
+
+    const rebuilt = rebuildRepoBackedProjectState(
+      makeState({
+        repos: [rooted('a'), rooted('b', { connectionId: 'srv' })],
+        projects: [
+          makeProject({ id: 'repo:a', sourceRepoIds: ['a'], updatedAt: 20 }),
+          makeProject({ id: 'repo:b', sourceRepoIds: ['b'], updatedAt: 10 })
+        ],
+        agents: [agent('on-a', 'repo:a'), agent('on-b', 'repo:b'), agent('free', null)],
+        worktreeMeta: { 'b::/srv/b-feature': { projectId: 'repo:b' } as never }
+      })
+    )
+
+    expect(rebuilt.projects.map((project) => project.id)).toEqual([rootId])
+    expect(rebuilt.agents.map((entry) => entry.projectId)).toEqual([rootId, rootId, null])
+    expect(rebuilt.worktreeMeta['b::/srv/b-feature']?.projectId).toBe(rootId)
+  })
 })

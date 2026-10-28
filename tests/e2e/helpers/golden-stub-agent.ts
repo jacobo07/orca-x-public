@@ -30,9 +30,15 @@ export async function configureGoldenStubAgent(page: Page): Promise<void> {
 }
 
 export async function launchGoldenStubAgentFromNewTab(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New tab' }).click({ force: true })
-  const launchOption = page.getByRole('menuitem', { name: /^Codex(?:\s|$)/i }).first()
-  await expect(launchOption).toBeVisible({ timeout: 15_000 })
+  // Why: the codex agent is offered as ChatGPT, a brand label that is never translated.
+  const launchOption = page.getByRole('menuitem', { name: /^ChatGPT(?:\s|$)/i }).first()
+  // Why no force: the titlebar still shifts after startup, and a forced click at a stale box hit the app menu.
+  await expect(async () => {
+    if (!(await launchOption.isVisible())) {
+      await page.getByRole('button', { name: 'New tab' }).click({ timeout: 3_000 })
+    }
+    await expect(launchOption).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 15_000 })
   await launchOption.click({ force: true })
   await focusActiveTerminalInput(page)
   await waitForTerminalOutput(page, GOLDEN_STUB_READY_MARKER, 20_000)

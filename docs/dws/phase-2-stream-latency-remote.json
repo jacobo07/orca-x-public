@@ -1,0 +1,11 @@
+{
+  "verdict": "MEASURED",
+  "medianMs": 964.6409000000131,
+  "minMs": 924.4176000000007,
+  "maxMs": 2978.393400000001,
+  "iqrMs": 41.71270000000368,
+  "count": 7,
+  "n": 7,
+  "instrument": "performance.now() before Enter to orcaPage.waitForFunction(polling:raf) seeing the MARK-<n>-<n*7> output line in the pane serialize() buffer",
+  "resolutionMs": 17
+}

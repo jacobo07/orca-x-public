@@ -18,7 +18,9 @@ export type AgentProcessHostDeps = {
 
 export const defaultAgentProcessHostDeps: AgentProcessHostDeps = {
   spawn: nodeSpawn,
-  resolveCommand: (command) => resolveCommandPathForRelay(command),
+  // Why: a lookup that could not run refuses as command-not-found here, as it did before the
+  // resolver learned to throw for the environment probe.
+  resolveCommand: (command) => resolveCommandPathForRelay(command).catch(() => null),
   isDirectory: async (target) => {
     try {
       const resolved = await realpath(target)

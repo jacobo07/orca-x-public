@@ -1,4 +1,4 @@
-import ExpoTwoWayAudioModule from './ExpoTwoWayAudioModule'
+import { nativeTwoWayAudio } from './core'
 
 export interface MicrophoneDataEvent {
   data: Uint8Array
@@ -34,5 +34,5 @@ export function addExpoTwoWayAudioEventListener<K extends keyof ExpoTwoWayAudioE
   eventName: K,
   handler: (ev: ExpoTwoWayAudioEventMap[K]) => void
 ) {
-  return ExpoTwoWayAudioModule.addListener(eventName, handler)
+  return nativeTwoWayAudio().addListener(eventName, handler)
 }

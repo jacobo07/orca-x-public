@@ -1,7 +1,31 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { colors } from '../theme/mobile-theme'
+import type { ConnectionVerdict } from '../transport/connection-health'
+import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
+import { MIN_COMPATIBLE_DESKTOP_VERSION } from '../transport/protocol-version'
+import type { ConnectionState, HostCredentialStatus } from '../transport/types'
 import { MobileHostCard } from './MobileHostCard'
+
+const serveStatusResult = {
+  protocolVersion: MIN_COMPATIBLE_DESKTOP_VERSION,
+  graphStatus: 'ready',
+  desktopWindowStatus: 'openable',
+  capabilities: ['host.availability.v1'],
+  hostAvailability: {
+    schema: 1,
+    processKind: 'serve',
+    observedAt: 1500,
+    capabilities: {
+      'can-relay': {
+        value: 'supported',
+        reason: 'relay_paired',
+        evidence: { kind: 'relay-reported', observedAt: 1500 }
+      }
+    }
+  }
+}
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -66,7 +90,13 @@ describe('MobileHostCard', () => {
     const buttons = renderer.root.findAllByType('Pressable')
     expect(buttons).toHaveLength(2)
     expect(buttons[0].props.accessibilityRole).toBe('button')
-    expect(buttons[0].props.accessibilityLabel).toBe('Open Desk, Disconnected')
+    expect(buttons[0].props.accessibilityLabel).toBe(
+      'Open Desk, Disconnected, Power unknown, Orca unknown, Capabilities unknown'
+    )
+    expect(buttons.map((button) => button.props.testID)).toEqual([
+      'host-card-open',
+      'host-card-actions'
+    ])
     expect(buttons[1].props.accessibilityRole).toBe('button')
     expect(buttons[1].props.accessibilityLabel).toBe('Actions for Desk')
     expect(buttons[1].props.hitSlop).toBe(8)
@@ -117,7 +147,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      'Open Desk, Connected, Direct via Tailscale, 3 worktrees, 2 active'
+      'Open Desk, Connected, Direct via Tailscale, 3 worktrees, 2 active, Power unknown, Orca unknown, Capabilities unknown'
     )
   })
 
@@ -154,7 +184,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      'Open Desk, Connected, Orca Relay, Worktree list unavailable'
+      'Open Desk, Connected, Orca Relay, Worktree list unavailable, Power unknown, Orca unknown, Capabilities unknown'
     )
     expect(
       renderer.root
@@ -193,7 +223,214 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      "Open Desk, Can't reach desktop, Update desktop Orca X and sign in to connect from anywhere"
+      "Open Desk, Can't reach desktop, Power unknown, Orca unknown, Capabilities unknown, Update desktop Orca X and sign in to connect from anywhere"
     )
   })
+
+  it('projects a current serve-host status answer onto the availability and capability lines', async () => {
+    const consoleError = suppressRendererDeprecation()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileHostCard, {
+          host: {
+            id: 'desk',
+            name: 'Desk',
+            endpoint: 'ws://192.168.1.2:6768',
+            deviceToken: 'token',
+            publicKeyB64: 'key',
+            lastConnected: 1
+          },
+          state: 'connected',
+          verdict: { kind: 'normal', label: 'Connected' },
+          path: 'lan',
+          lastConnectedAt: 1000,
+          statusSnapshot: { observedAt: 2000, result: serveStatusResult },
+          onPress: vi.fn(),
+          onLongPress: vi.fn(),
+          onOpenActions: vi.fn()
+        })
+      )
+    })
+    consoleError.mockRestore()
+
+    const root = renderer!.root
+    expect(root.findByProps({ testID: 'host-card-availability' }).children).toEqual([
+      'Awake · Host Service running'
+    ])
+    const capabilityLine = root.findByProps({ testID: 'host-card-capabilities' }).children
+    expect(capabilityLine).toHaveLength(1)
+    expect(String(capabilityLine[0])).toContain('Relay: yes')
+    expect(root.findAllByType('Pressable')).toHaveLength(2)
+  })
+})
+
+type CardCaseProps = {
+  state: ConnectionState
+  verdict: ConnectionVerdict
+  credentialStatus?: HostCredentialStatus
+  lastConnectedAt?: number | null
+  statusSnapshot?: HomeHostStatusSnapshot
+}
+
+const POWER_LOSS_WORDS = /powered[\s-]?off|asleep|sleeping|hibernat|offline/i
+const EFFECT_WORDS = /\b(wake|power[\s-]?on)\b/i
+const oldHostResult = {
+  protocolVersion: MIN_COMPATIBLE_DESKTOP_VERSION,
+  graphStatus: 'ready',
+  desktopWindowStatus: 'openable'
+}
+const connectedNormal = {
+  state: 'connected',
+  verdict: { kind: 'normal', label: 'Connected' }
+} as const
+
+const CARD_CASES: Array<[string, CardCaseProps]> = [
+  [
+    'disconnected without an answer',
+    { state: 'disconnected', verdict: { kind: 'normal', label: 'Disconnected' } }
+  ],
+  [
+    'old host, current answer',
+    {
+      ...connectedNormal,
+      lastConnectedAt: 1000,
+      statusSnapshot: { observedAt: 2000, result: oldHostResult }
+    }
+  ],
+  [
+    'stale answer',
+    {
+      ...connectedNormal,
+      lastConnectedAt: 3000,
+      statusSnapshot: { observedAt: 2000, result: serveStatusResult }
+    }
+  ],
+  [
+    'version mismatch',
+    {
+      ...connectedNormal,
+      lastConnectedAt: 1000,
+      statusSnapshot: { observedAt: 2000, result: { ...oldHostResult, protocolVersion: 0 } }
+    }
+  ],
+  [
+    'credential missing with a current answer',
+    {
+      state: 'connected',
+      verdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+      credentialStatus: 'missing',
+      lastConnectedAt: 1000,
+      statusSnapshot: { observedAt: 2000, result: serveStatusResult }
+    }
+  ],
+  [
+    'serve host with announced capabilities',
+    {
+      ...connectedNormal,
+      lastConnectedAt: 1000,
+      statusSnapshot: { observedAt: 2000, result: serveStatusResult }
+    }
+  ]
+]
+
+describe('MobileHostCard availability projection', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.restoreAllMocks()
+  })
+
+  async function renderCase(props: CardCaseProps) {
+    const consoleError = suppressRendererDeprecation()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileHostCard, {
+          host: {
+            id: 'desk',
+            name: 'Desk',
+            endpoint: 'ws://192.168.1.2:6768',
+            deviceToken: 'token',
+            publicKeyB64: 'key',
+            lastConnected: 1
+          },
+          path: 'lan',
+          ...props,
+          onPress: vi.fn(),
+          onLongPress: vi.fn(),
+          onOpenActions: vi.fn()
+        })
+      )
+    })
+    consoleError.mockRestore()
+    const root = renderer!.root
+    const availability = root.findByProps({ testID: 'host-card-availability' })
+    const capabilities = root.findByProps({ testID: 'host-card-capabilities' })
+    return { root, availability, capabilities, availabilityText: availability.children.join('') }
+  }
+
+  it('states unknown for a disconnected host and offers exactly the two classified controls', async () => {
+    const { root, availabilityText } = await renderCase(CARD_CASES[0][1])
+
+    expect(availabilityText).toBe('Power unknown · Orca unknown')
+    const buttons = root.findAllByType('Pressable')
+    expect(buttons.map((button) => button.props.testID)).toEqual([
+      'host-card-open',
+      'host-card-actions'
+    ])
+  })
+
+  it('reads an old host as running with unknown capabilities', async () => {
+    const { availabilityText, capabilities } = await renderCase(CARD_CASES[1][1])
+
+    expect(availabilityText).toBe('Awake · Orca running, window closed')
+    expect(capabilities.children).toEqual(['Capabilities unknown'])
+  })
+
+  it('does not call the host awake on an answer from before the latest connect', async () => {
+    const { availabilityText } = await renderCase(CARD_CASES[2][1])
+
+    expect(availabilityText).toBe('Power unknown · Orca unknown')
+  })
+
+  it('colours a version mismatch with the amber status token', async () => {
+    const { availability, availabilityText } = await renderCase(CARD_CASES[3][1])
+
+    expect(availabilityText).toBe('Awake · Orca version mismatch')
+    expect(availability.props.style[1]).toEqual({ color: colors.statusAmber })
+  })
+
+  it('reads unknown while the pairing credential is missing', async () => {
+    const { availabilityText } = await renderCase(CARD_CASES[4][1])
+
+    expect(availabilityText).toBe('Power unknown · Orca unknown')
+  })
+
+  it.each(CARD_CASES)(
+    'renders no power-loss word and no effect control (%s)',
+    async (_name, props) => {
+      const { root, capabilities } = await renderCase(props)
+      const capabilityText = capabilities.children.join('')
+      const otherTexts = root
+        .findAllByType('Text')
+        .filter((node) => node.props.testID !== 'host-card-capabilities')
+        .map((node) => node.children.filter((child) => typeof child === 'string').join(''))
+      const buttons = root.findAllByType('Pressable')
+
+      expect(buttons).toHaveLength(2)
+      for (const text of [...otherTexts, capabilityText]) {
+        expect(text).not.toMatch(POWER_LOSS_WORDS)
+      }
+      for (const text of otherTexts) {
+        expect(text).not.toMatch(EFFECT_WORDS)
+      }
+      const spokenCapabilities = capabilityText.split(' · ').join(', ')
+      for (const button of buttons) {
+        const label = String(button.props.accessibilityLabel).replace(spokenCapabilities, '')
+        expect(label).not.toMatch(EFFECT_WORDS)
+        expect(label).not.toMatch(POWER_LOSS_WORDS)
+      }
+    }
+  )
 })

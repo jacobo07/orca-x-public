@@ -2,6 +2,7 @@ import {
   buildRegistry,
   formatZodError,
   isStreamingMethod,
+  socketAbortSignalsFor,
   type RpcAnyMethod,
   type RpcEnvelopeMeta,
   type RpcRegistry,
@@ -101,7 +102,7 @@ export class RpcDispatcher {
         const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
         return method.handler(effectiveParams, {
           runtime: this.runtime,
-          signal: options?.signal,
+          ...socketAbortSignalsFor(method, options?.signal),
           requestId: request.id,
           orchestrationCapability: request.orchestrationCapability,
           authenticatedCallerFingerprint:
@@ -194,7 +195,7 @@ export class RpcDispatcher {
           const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
           return method.handler(effectiveParams, {
             runtime: this.runtime,
-            signal: options?.signal,
+            ...socketAbortSignalsFor(method, options?.signal),
             requestId: request.id,
             connectionId: options?.connectionId,
             clientId: options?.clientId,
@@ -256,7 +257,7 @@ export class RpcDispatcher {
         parsedParams.value,
         {
           runtime: this.runtime,
-          signal: options?.signal,
+          ...socketAbortSignalsFor(method, options?.signal),
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,

@@ -1,6 +1,6 @@
+import type { ProjectIdentityCollision } from '../../shared/project-identity-collisions'
 import type {
   Project,
-  ProjectHostSetup,
   ProjectHostSetupCloneArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -11,7 +11,16 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
 import type { RepoKind } from '../../shared/repo-types'
+import type { ProjectHostSetupWithReplicaTopology } from '../../shared/replica-topology'
 import type { CommandHandler } from '../dispatch'
+import type { EnvironmentRequirementsMeasurement } from '../../shared/environment-requirements-measurement'
+import { buildPreparePlan } from '../../shared/environment-prepare-plan'
+import { nodePrepareSha256Hex } from '../../shared/environment-prepare-node-hash'
+import {
+  formatEnvironmentRequirements,
+  formatPrepareRun,
+  formatPreparePlan
+} from '../environment-requirements-format'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -24,6 +33,10 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
+import {
+  runProjectSetupsAllEnvironments,
+  savedEnvironmentFanOut
+} from './project-setups-all-environments'
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -41,16 +54,33 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ projects: Project[] }>('project.list')
     printResult(result, json, formatProjectList)
   },
-  'project setups': async ({ flags, client, json }) => {
+  'project setups': async (ctx) => {
+    if (ctx.flags.get('all-environments') === true) {
+      await runProjectSetupsAllEnvironments(ctx, savedEnvironmentFanOut())
+      return
+    }
+    const { flags, client, json } = ctx
     const projectFilter = getOptionalStringFlag(flags, 'project')
     const hostFilter = getOptionalStringFlag(flags, 'host')
-    const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+    // Why: this list already carries `identityCollisions` for a host that reports them, so a
+    // second project.list round trip would only repeat it.
+    const result = await client.call<{
+      setups: ProjectHostSetupWithReplicaTopology[]
+      identityCollisions?: ProjectIdentityCollision[]
+    }>('projectHostSetup.list')
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
         (hostFilter === undefined || setup.hostId === hostFilter)
     )
-    printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
+    const { identityCollisions } = result.result
+    const runtimeId = result._meta?.runtimeId
+    const runtimeLabel = runtimeId ? `the connected Orca runtime (${runtimeId})` : undefined
+    printResult(
+      { ...result, result: { setups, ...(identityCollisions ? { identityCollisions } : {}) } },
+      json,
+      (value) => formatProjectHostSetupList(value, runtimeLabel)
+    )
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')
@@ -141,6 +171,78 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, formatProjectHostSetupDeleteResult)
+  },
+  'project requirements': async ({ flags, client, json }) => {
+    const result = await client.call<EnvironmentRequirementsMeasurement>(
+      'environment.measureRequirements',
+      { repo: getRequiredStringFlag(flags, 'repo') }
+    )
+    printResult(result, json, formatEnvironmentRequirements)
+  },
+  'project prepare': async ({ flags, client, json }) => {
+    const repo = getRequiredStringFlag(flags, 'repo')
+    const wantsPlan = flags.get('plan') === true
+    const approvedHash = getOptionalStringFlag(flags, 'approve')
+    const requirementId = getOptionalStringFlag(flags, 'requirement')
+    if (wantsPlan === (approvedHash !== undefined)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use exactly one of --plan or --approve <hash>'
+      )
+    }
+    if (wantsPlan !== (requirementId === undefined)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--requirement goes with --approve <hash>, and --plan takes no --requirement'
+      )
+    }
+    if (approvedHash !== undefined && !/^[0-9a-f]{64}$/.test(approvedHash)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--approve takes the 64-hex hash from --plan'
+      )
+    }
+    // Why: the host key is read fresh from the host that will run the step, never typed.
+    const measured = await client.call<EnvironmentRequirementsMeasurement>(
+      'environment.measureRequirements',
+      { repo }
+    )
+    const { measurement, contractSource, contract, requirements } = measured.result
+    if (approvedHash === undefined || requirementId === undefined) {
+      const plan = await buildPreparePlan(
+        {
+          contractSource,
+          hostKey: measurement.hostKey,
+          requirements,
+          measurement,
+          approvals: {},
+          contract
+        },
+        { sha256Hex: nodePrepareSha256Hex }
+      )
+      const approvals = plan.steps.map((step) => ({
+        requirementId: step.requirementId,
+        hash: step.approvalHash,
+        hostKey: plan.hostKey
+      }))
+      printResult({ ...measured, result: { plan, approvals } }, json, (value) =>
+        formatPreparePlan(value.plan, repo)
+      )
+      return
+    }
+    // Why: only a requirement id and the approval hash travel; the host re-reads orca.yaml.
+    const outcome = await client.call<
+      { status: 'started' } | { status: 'refused'; reason: string }
+    >('environment.runPrepareStep', {
+      repo,
+      requirementId,
+      approvedContentHash: approvedHash,
+      approvedHostKey: measurement.hostKey
+    })
+    printResult(outcome, json, formatPrepareRun)
+    if (outcome.result.status !== 'started') {
+      process.exitCode = 1
+    }
   }
 }
 

@@ -1,0 +1,10 @@
+{
+  "verdict": {
+    "value": "unknown",
+    "reason": "amd_no_amt_oob_unmeasured",
+    "evidence": null
+  },
+  "vendor": "AuthenticAMD",
+  "meiCount": 0,
+  "observedAt": 1793189230480
+}

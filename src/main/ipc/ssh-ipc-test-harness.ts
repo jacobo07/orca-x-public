@@ -170,6 +170,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockSshStore.getTarget.mockReset()
     mockSshStore.addTarget.mockReset()
     mockSshStore.updateTarget.mockReset()
+    mockSshStore.setHostKeyPin.mockReset()
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
     mockSshStore.lastRepoReadoptions = []

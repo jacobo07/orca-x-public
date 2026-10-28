@@ -276,4 +276,39 @@ describe('useLiveWorktreeName request volume', () => {
     await mount()
     expect(resolution).toBe('unknown')
   })
+
+  it('publishes the worktree root the host reports, and null when it sends none', async () => {
+    let path: string | null | undefined
+    function PathHarness(): null {
+      path = useLiveWorktreeName({
+        client,
+        connState: 'connected',
+        routeName: 'Route name',
+        worktreeId: 'repo-1::/worktree'
+      }).path
+      return null
+    }
+    const mount = async (): Promise<void> => {
+      await act(async () => {
+        renderer = create(createElement(PathHarness))
+        await Promise.resolve()
+      })
+    }
+
+    await mount()
+    expect(path).toBeNull()
+
+    act(() => renderer?.unmount())
+    renderer = null
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: true,
+      result: {
+        worktree: { id: 'repo-1::/worktree', displayName: 'Live name', path: '/home/ada/repo' }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await mount()
+    expect(path).toBe('/home/ada/repo')
+  })
 })

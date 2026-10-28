@@ -1,6 +1,10 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
+import {
+  sanitizeGitRootIdentity,
+  sanitizeGitRootIdentityNoneReason
+} from '../../../shared/git-root-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import {
@@ -73,6 +77,8 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'repoIcon'
       | 'upstream'
       | 'gitRemoteIdentity'
+      | 'gitRootIdentity'
+      | 'gitRootIdentityNoneReason'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
@@ -113,6 +119,29 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.gitRemoteIdentity
     } else {
       sanitized.gitRemoteIdentity = gitRemoteIdentity
+    }
+  }
+  if ('gitRootIdentity' in sanitized) {
+    const gitRootIdentity = sanitizeGitRootIdentity(sanitized.gitRootIdentity)
+    if (gitRootIdentity === undefined) {
+      delete sanitized.gitRootIdentity
+    } else {
+      sanitized.gitRootIdentity = gitRootIdentity
+      // Why: a resolved root supersedes any earlier "no root" reason, so the update clears it.
+      if (gitRootIdentity !== null) {
+        sanitized.gitRootIdentityNoneReason = undefined
+      }
+    }
+  }
+  if (
+    'gitRootIdentityNoneReason' in sanitized &&
+    sanitized.gitRootIdentityNoneReason !== undefined
+  ) {
+    const reason = sanitizeGitRootIdentityNoneReason(sanitized.gitRootIdentityNoneReason)
+    if (reason === undefined) {
+      delete sanitized.gitRootIdentityNoneReason
+    } else {
+      sanitized.gitRootIdentityNoneReason = reason
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {

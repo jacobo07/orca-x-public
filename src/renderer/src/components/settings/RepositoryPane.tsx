@@ -12,6 +12,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
+import { PrepareThisDeviceSection } from './PrepareThisDeviceSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
@@ -382,6 +383,13 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    forceFullPaneForRepoMatch || !searchQuery.trim() ? (
+      <PrepareThisDeviceSection
+        key="prepare-device"
+        repo={repo}
+        selectedProjectSetupId={selectedProjectSetupId}
+      />
+    ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection

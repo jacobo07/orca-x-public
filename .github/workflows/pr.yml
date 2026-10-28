@@ -97,11 +97,19 @@ jobs:
       - name: Check mobile capability aperture
         run: pnpm run check:mobile-aperture
 
+      # A phone row standing in for a remote send says what is known, never "sent" on a write receipt (SEND-P0).
+      - name: Check mobile remote-effect bubbles
+        run: pnpm run check:mobile-remote-effect-bubbles
+
       - name: Check visual asset registry
         run: pnpm run check:visual-assets
 
       - name: Check status semantics
         run: pnpm run check:status-semantics
+
+      # The operator's secret hook runs on one machine; this is the only control CI sees (threat model D6).
+      - name: Check tracked files for credentials
+        run: pnpm run check:tracked-secrets
 
       # Four gates the two merged programs each chained only into `lint`, which no workflow runs.
       - name: Check dispatch admission
@@ -121,6 +129,11 @@ jobs:
       # written into the surface. Visual polish never authorizes a value.
       - name: Check Workspace surface claims
         run: pnpm run check:workspace-surface-claims
+
+      # The phone's host card: no power-loss state without a producer and evidence, and no control
+      # without a backend effect (unreachable is not powered off).
+      - name: Check host card claims
+        run: pnpm run check:host-card-claims
 
       # The program matrix's integrity, never its completion: the done-gate
       # (`check:cognitive-workspace-completeness`) is red by construction until the program ends.

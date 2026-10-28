@@ -1,8 +1,11 @@
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { afterEach, describe, expect, it } from 'vitest'
+import { isHostKey } from '../../shared/host-wake'
+import { hostKeyFromPublicKeyB64 } from '../../shared/host-wake-proxy'
 import { loadOrCreateE2EEKeypair, readE2EEPublicKey } from './e2ee-keypair'
 import { fingerprintHostPublicKey } from './host-key-fingerprint'
 import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
@@ -37,6 +40,79 @@ describe('host key fingerprint', () => {
     expect(fingerprintHostPublicKey(`${good.slice(0, 10)}!!${good.slice(10)}`)).toBeNull()
     expect(fingerprintHostPublicKey('')).toBeNull()
     expect(fingerprintHostPublicKey(good)).not.toBeNull()
+  })
+})
+
+// Why node:crypto here: the phone passes @noble/hashes sha256; both return the raw 32-byte digest.
+function sha256(bytes: Uint8Array): Uint8Array {
+  return createHash('sha256').update(bytes).digest()
+}
+
+const VECTOR_KEY_B64 = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
+const VECTOR_HOST_KEY = 'Yw3NKWbEM2aRElRIu7JbT_QSpJxzLbLIq8G4WBvXEN0'
+
+describe('phone-side hostKey derivation (hostKeyFromPublicKeyB64)', () => {
+  it('equals the host fingerprint for 64 random 32-byte keys', () => {
+    for (let index = 0; index < 64; index += 1) {
+      const key = randomBytes(32).toString('base64')
+      const derived = hostKeyFromPublicKeyB64(key, sha256)
+      expect(derived, key).toBe(fingerprintHostPublicKey(key))
+      expect(isHostKey(derived), key).toBe(true)
+    }
+  })
+
+  it('agrees with the host on unpadded and double-padded text (atob and Buffer read the same bytes)', () => {
+    for (let index = 0; index < 16; index += 1) {
+      const padded = randomBytes(32).toString('base64')
+      const unpadded = padded.replace(/=+$/, '')
+      expect(unpadded).toHaveLength(43)
+      const expected = fingerprintHostPublicKey(padded)
+      expect(fingerprintHostPublicKey(unpadded), unpadded).toBe(expected)
+      expect(hostKeyFromPublicKeyB64(unpadded, sha256), unpadded).toBe(expected)
+      expect(fingerprintHostPublicKey(`${unpadded}==`), unpadded).toBe(expected)
+      expect(hostKeyFromPublicKeyB64(`${unpadded}==`, sha256), unpadded).toBe(expected)
+    }
+  })
+
+  it('hands the digest exactly the 32 decoded key bytes', () => {
+    const key = randomBytes(32)
+    const seen: Uint8Array[] = []
+    hostKeyFromPublicKeyB64(key.toString('base64'), (bytes) => {
+      seen.push(Uint8Array.from(bytes))
+      return sha256(bytes)
+    })
+    expect(seen).toHaveLength(1)
+    expect(Buffer.from(seen[0]).equals(key)).toBe(true)
+  })
+
+  it('returns null wherever the host fingerprint does, and never calls the digest', () => {
+    const good = randomBytes(32).toString('base64')
+    const rejected = [
+      randomBytes(31).toString('base64'),
+      randomBytes(33).toString('base64'),
+      good.slice(0, 41),
+      `${good.slice(0, 10)}!!${good.slice(10)}`,
+      ` ${good}`,
+      `${good}\n`,
+      `${good.replace(/=+$/, '')}===`,
+      Buffer.alloc(32, 0xff).toString('base64url'),
+      Buffer.alloc(32, 0xfb).toString('base64url'),
+      ''
+    ]
+    for (const text of rejected) {
+      expect(fingerprintHostPublicKey(text), JSON.stringify(text)).toBeNull()
+      const derived = hostKeyFromPublicKeyB64(text, () => {
+        throw new Error(`digest called for ${JSON.stringify(text)}`)
+      })
+      expect(derived, JSON.stringify(text)).toBeNull()
+    }
+  })
+
+  it('pins the vector the phone hardcodes (bytes 0x00..0x1f)', () => {
+    const vectorBytes = Buffer.from(Array.from({ length: 32 }, (_, index) => index))
+    expect(vectorBytes.toString('base64')).toBe(VECTOR_KEY_B64)
+    expect(fingerprintHostPublicKey(VECTOR_KEY_B64)).toBe(VECTOR_HOST_KEY)
+    expect(hostKeyFromPublicKeyB64(VECTOR_KEY_B64, sha256)).toBe(VECTOR_HOST_KEY)
   })
 })
 

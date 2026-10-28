@@ -10,6 +10,15 @@ import {
   type FleetResourceSample,
   type FleetUnmeasuredOutcome
 } from './fleet-resource-observation'
+import {
+  resourceRejectionsOf,
+  type FleetResourceRejection
+} from './fleet-placement-resource-rejection'
+import { manifestOf } from './node-manifest'
+import { judgeNodeEligibility, type NodeRequirement } from './node-manifest-eligibility'
+import { isMeasurementStale } from './node-measurement-age'
+import { compareFreeMemoryThenFingerprint } from './placement-host-ranking'
+import type { FleetNodeResourcesObservation } from './node-resources'
 
 export type FleetPlacementMember = {
   address: ExecutionHostId
@@ -17,14 +26,19 @@ export type FleetPlacementMember = {
   identity: FleetHostIdentity
   facts: FleetHostFacts
   sample: FleetResourceSample
+  /** Disk, GPU and model readings; absent = not collected, which the manifest reports as unknown. */
+  nodeResources?: FleetNodeResourcesObservation
 }
 
 export type FleetPlacementRequest = {
   now: number
   maxSampleAgeMs: number
   minAvailableBytes?: number
+  /** Memory, disk, VRAM and resident model needs, judged by judgeNodeEligibility. */
+  requirement?: NodeRequirement
   platform?: NodeJS.Platform
   requiredCapabilities?: readonly string[]
+  // Why: marker only; it stamps isCurrent and is not a ranking term since Phase 4.
   currentFingerprint?: string | null
 }
 
@@ -38,7 +52,7 @@ export type FleetPlacementRejection =
   | { reason: 'platform-mismatch'; platform: NodeJS.Platform }
   | { reason: 'capabilities-unknown' }
   | { reason: 'capability-missing'; capabilities: string[] }
-  | { reason: 'insufficient-memory'; availableMemory: number; required: number }
+  | FleetResourceRejection
 
 export type FleetPlacementCandidate = {
   key: string
@@ -86,6 +100,18 @@ function compareEvidence(a: FleetPlacementMember, b: FleetPlacementMember): numb
   return compareFleetAddresses(a.address, b.address)
 }
 
+// Why: the legacy minAvailableBytes and requirement.memory are one memory need; the larger bound wins.
+function mergedRequirement(request: FleetPlacementRequest): NodeRequirement | null {
+  const legacy = request.minAvailableBytes ?? 0
+  const memoryNeed = Math.max(request.requirement?.memory?.minAvailableBytes ?? 0, legacy)
+  const merged: NodeRequirement = { ...request.requirement }
+  if (request.requirement?.memory || legacy > 0) {
+    merged.memory = { minAvailableBytes: memoryNeed }
+  }
+  const hasFamily = Object.values(merged).some((family) => family !== undefined)
+  return hasFamily ? merged : null
+}
+
 function judge(
   member: FleetPlacementMember,
   request: FleetPlacementRequest
@@ -98,9 +124,8 @@ function judge(
   if (sample.outcome !== 'measured') {
     reasons.push({ reason: 'sample-unmeasured', outcome: sample.outcome })
   } else {
-    const ageMs = fleetSampleAgeMs(sample, request.now)
-    if (ageMs > request.maxSampleAgeMs) {
-      reasons.push({ reason: 'sample-stale', ageMs })
+    if (isMeasurementStale(sample.startedAt, request.maxSampleAgeMs, request.now)) {
+      reasons.push({ reason: 'sample-stale', ageMs: fleetSampleAgeMs(sample, request.now) })
     }
   }
   if (facts.protocol === 'blocked') {
@@ -127,13 +152,15 @@ function judge(
       }
     }
   }
-  const minimum = request.minAvailableBytes ?? 0
-  if (sample.outcome === 'measured' && minimum > 0 && sample.availableMemory < minimum) {
-    reasons.push({
-      reason: 'insufficient-memory',
-      availableMemory: sample.availableMemory,
-      required: minimum
-    })
+  const requirement = mergedRequirement(request)
+  if (requirement) {
+    const manifest = manifestOf(member, request.now, { memoryMaxAgeMs: request.maxSampleAgeMs })
+    const sampleStale = reasons.some((r) => r.reason === 'sample-stale')
+    reasons.push(
+      ...resourceRejectionsOf(judgeNodeEligibility(manifest, requirement, request.now), {
+        memoryAlreadyReported: sample.outcome !== 'measured' || sampleStale
+      })
+    )
   }
   return reasons
 }
@@ -173,15 +200,7 @@ export function planFleetPlacement(
       isCurrent: group.fingerprint === request.currentFingerprint
     })
   }
-  eligible.sort((a, b) => {
-    if (a.availableMemory !== b.availableMemory) {
-      return b.availableMemory - a.availableMemory
-    }
-    if (a.isCurrent !== b.isCurrent) {
-      return a.isCurrent ? -1 : 1
-    }
-    return a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0
-  })
+  eligible.sort(compareFreeMemoryThenFingerprint)
   const selected = eligible[0] ?? null
   return {
     decision: selected ? 'selected' : 'no-eligible-host',

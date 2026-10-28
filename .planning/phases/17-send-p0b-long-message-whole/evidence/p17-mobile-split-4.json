@@ -1,0 +1,32 @@
+﻿{
+  "scenario": "mobile-split",
+  "paragraphs": 4,
+  "sep": "lf",
+  "bodyLength": 785,
+  "whole": true,
+  "turns": 2,
+  "requests": [
+    {
+      "hasHead": true,
+      "hasTail": true,
+      "userTextLength": 986,
+      "userTextStart": "<session>\nHEADMARK-caa4e029 Paragraph 1: the phone asks the desktop agent a long"
+    },
+    {
+      "hasHead": true,
+      "hasTail": true,
+      "userTextLength": 112292,
+      "userTextStart": "<system-reminder>\nCodebase and user instructions are shown below. Be sure to adh"
+    }
+  ],
+  "afterTail": [
+    "  enough words that every paragraph is well over a hundred characters long. TAILMARK-caa4e029",
+    "● ok",
+    "✻ Cogitated for 1s · done 6:27 PM",
+    "                                                                                                    ◐ medium · /effort  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "❯  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) "
+  ]
+}

@@ -1,5 +1,6 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
+import { hostAvailabilityProducer } from '../../host-availability-producer'
 
 export const STATUS_METHODS: RpcMethod[] = [
   defineMethod({
@@ -11,7 +12,8 @@ export const STATUS_METHODS: RpcMethod[] = [
         ...runtime.getStatus(),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
-        remoteUpdateSupport: snapshot.support
+        remoteUpdateSupport: snapshot.support,
+        hostAvailability: hostAvailabilityProducer.describe()
       }
     }
   })

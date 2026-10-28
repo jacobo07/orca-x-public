@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Plus, QrCode } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { HostProfile } from '../transport/types'
-import { hostEndpointLabel } from '../transport/host-endpoint-label'
+import { hostPickerOptions } from '../transport/host-picker-options'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { PickerModal } from './PickerModal'
 
@@ -10,26 +10,6 @@ type Props = {
   connectedHosts: HostProfile[]
   onPairDesktop: () => void
   onCreateWorkspace: (hostId: string) => void
-}
-
-function hostPickerOptions(hosts: HostProfile[]) {
-  const entries = hosts.map((host) => ({
-    host,
-    endpointLabel: hostEndpointLabel(host.endpoint)
-  }))
-  const endpointCounts = new Map<string, number>()
-  for (const entry of entries) {
-    const endpointKey = JSON.stringify([entry.host.name, entry.endpointLabel])
-    endpointCounts.set(endpointKey, (endpointCounts.get(endpointKey) ?? 0) + 1)
-  }
-  return entries.map((entry) => {
-    const endpointKey = JSON.stringify([entry.host.name, entry.endpointLabel])
-    const endpointCollides = (endpointCounts.get(endpointKey) ?? 0) > 1
-    const subtitle = endpointCollides
-      ? `${entry.endpointLabel} · ${entry.host.id}`
-      : entry.endpointLabel
-    return { value: entry.host.id, label: entry.host.name, subtitle }
-  })
 }
 
 export function MobileHomeQuickActions(props: Props) {

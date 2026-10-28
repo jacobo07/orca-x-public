@@ -13,6 +13,7 @@ const holder = vi.hoisted(() => ({
   list: null as unknown as (scope: unknown) => Promise<unknown>,
   preview: null as unknown as (request: unknown) => Promise<unknown>,
   restore: null as unknown as (request: unknown) => Promise<unknown>,
+  continueHere: null as unknown as (request: unknown) => Promise<unknown>,
   save: null as unknown as (request: unknown) => Promise<unknown>,
   launch: { readiness: 'resolved', profiles: [] as { id: string }[] }
 }))
@@ -39,7 +40,8 @@ vi.mock('@/lib/project-working-set-restore', () => ({
   previewWorkingSetRestore: (request: unknown) => holder.preview(request)
 }))
 vi.mock('@/lib/project-working-set-product-restore', () => ({
-  restoreWorkingSetFromProduct: (request: unknown) => holder.restore(request)
+  restoreWorkingSetFromProduct: (request: unknown) => holder.restore(request),
+  continueWorkingSetFromProduct: (request: unknown) => holder.continueHere(request)
 }))
 vi.mock('@/lib/project-working-set-save', () => ({
   saveProjectWorkingSet: (request: unknown) => holder.save(request)
@@ -133,6 +135,7 @@ beforeEach(() => {
   holder.list = vi.fn(async () => listed())
   holder.preview = vi.fn(async () => ({ status: 'planned', plan: plan() }))
   holder.restore = vi.fn(async () => ({ status: 'restored', rows: 5 }))
+  holder.continueHere = vi.fn(async () => ({ status: 'restored', rows: 5, panes: [] }))
   holder.launch = { readiness: 'resolved', profiles: PROFILES }
   holder.save = vi.fn(async () => ({
     status: 'saved',
@@ -292,5 +295,124 @@ describe('WorkingSetsDialog', () => {
     await click(restoreButton())
     expect(store.getState().activeModal).toBe('working-sets')
     expect(q('working-set-restore-result')[0].textContent).toContain('undone')
+  })
+})
+
+describe('WorkingSetsDialog Continue here', () => {
+  const PROJECT = 'github:acme/orca'
+  const LOCAL = {
+    id: 'setup-local',
+    projectId: PROJECT,
+    hostId: 'local',
+    repoId: 'repo-1',
+    path: 'C:/work/orca',
+    displayName: 'orca-local',
+    setupState: 'ready'
+  }
+  const REMOTE = {
+    ...LOCAL,
+    id: 'setup-ssh',
+    hostId: 'ssh:box',
+    repoId: 'repo-2',
+    displayName: 'orca-ssh'
+  }
+
+  function seedSetups(setups: unknown[]): void {
+    store.setState({
+      projectHostSetups: setups,
+      worktreesByRepo: { 'repo-1': [{ id: OWNER, repoId: 'repo-1', path: 'C:/work/orca' }] }
+    } as never)
+  }
+
+  async function chooseTarget(): Promise<void> {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    await user.click(document.body.querySelector('[role="combobox"]') as HTMLElement)
+    await user.click(await findOption())
+    await flush()
+  }
+
+  async function findOption(): Promise<HTMLElement> {
+    for (let i = 0; i < 20; i += 1) {
+      const option = document.body.querySelector<HTMLElement>('[role="option"]')
+      if (option) {
+        return option
+      }
+      await flush()
+    }
+    throw new Error('no option rendered')
+  }
+
+  beforeEach(() => {
+    Object.assign(HTMLElement.prototype, {
+      hasPointerCapture: () => false,
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      scrollIntoView: () => {}
+    })
+  })
+
+  afterEach(() => {
+    store.setState({ projectHostSetups: [], worktreesByRepo: {} } as never)
+  })
+
+  it('offers nothing when the project has no other ready host', async () => {
+    seedSetups([LOCAL])
+    await render()
+    expect(q('working-set-continue-section')).toHaveLength(0)
+    expect(q('working-set-continue')).toHaveLength(0)
+  })
+
+  it('continues the selected snapshot on the other host and leaves the dialog open', async () => {
+    seedSetups([LOCAL, REMOTE])
+    holder.continueHere = vi.fn(async () => ({
+      status: 'restored',
+      rows: 1,
+      panes: [
+        {
+          sourceTabId: 's1',
+          targetTabId: 't1',
+          leafId: 'l1',
+          disposition: 'restart',
+          reason: 'relaunchable'
+        }
+      ]
+    }))
+    await render()
+    const button = () => q('working-set-continue')[0] as HTMLButtonElement
+    expect(button().disabled).toBe(true)
+    await click(q('working-set-row')[1])
+    await chooseTarget()
+    expect(button().disabled).toBe(false)
+    await click(button())
+    expect(holder.continueHere).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        scope: { executionHostId: 'local', ownerKey: OWNER },
+        workingSetId: SECOND.workingSetId,
+        launchProfiles: PROFILES,
+        target: expect.objectContaining({
+          sourceSetupId: 'setup-local',
+          targetSetupId: 'setup-ssh'
+        })
+      })
+    )
+    expect(holder.restore).not.toHaveBeenCalled()
+    expect(store.getState().activeModal).toBe('working-sets')
+    expect(q('working-set-continue-result')[0].dataset.continueStatus).toBe('restored')
+    expect(q('working-set-continue-pane')[0].dataset.paneDisposition).toBe('restart')
+  })
+
+  it('leaves Restore exactly as it was when Continue here is offered', async () => {
+    seedSetups([LOCAL, REMOTE])
+    await render()
+    await click(q('working-set-row')[1])
+    await click(restoreButton())
+    expect(holder.restore).toHaveBeenCalledExactlyOnceWith({
+      scope: { executionHostId: 'local', ownerKey: OWNER },
+      workingSetId: SECOND.workingSetId,
+      launchProfiles: PROFILES
+    })
+    expect(holder.continueHere).not.toHaveBeenCalled()
+    expect(store.getState().activeModal).toBe('none')
   })
 })

@@ -1,7 +1,8 @@
 import {
   observeFleet,
   type FleetObservation,
-  type FleetObservationDeps
+  type FleetObservationDeps,
+  type FleetObservationOptions
 } from './fleet-observation-service'
 
 let installed: FleetObservationDeps | null = null
@@ -12,6 +13,8 @@ export function installFleetObservation(deps: FleetObservationDeps | null): void
   installed = deps
 }
 
-export function readFleetObservation(): Promise<FleetObservation> | null {
-  return installed ? observeFleet(installed) : null
+export function readFleetObservation(
+  options?: FleetObservationOptions
+): Promise<FleetObservation> | null {
+  return installed ? observeFleet(installed, options) : null
 }

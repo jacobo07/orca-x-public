@@ -64,7 +64,12 @@ export function AddRemoteHostServerFormPanel({
           <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
             {translate('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
           </Button>
-          <Button type="button" onClick={onSubmit} disabled={disabled || !canSubmit}>
+          <Button
+            type="button"
+            data-testid="add-remote-server-save"
+            onClick={onSubmit}
+            disabled={disabled || !canSubmit}
+          >
             {disabled
               ? translate('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
               : translate('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}

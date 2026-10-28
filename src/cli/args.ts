@@ -15,6 +15,8 @@ export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
 const GLOBAL_VALUE_FLAGS = new Set(['pairing-code', 'environment'])
 export const BOOLEAN_FLAGS = new Set([
   'all',
+  'all-environments',
+  'apply',
   'attachments',
   'children',
   'comments',
@@ -39,6 +41,7 @@ export const BOOLEAN_FLAGS = new Set([
   'mobile-pairing',
   'no-pairing',
   'parent-current',
+  'plan',
   'provision',
   'ready',
   'recipe-json',
@@ -54,8 +57,23 @@ export const BOOLEAN_FLAGS = new Set([
   'text-stdin',
   'unread',
   'value-stdin',
-  'wait'
+  'wait',
+  'wake-broker'
 ])
+
+// Why: `tasks` is a switch for `orchestration reset` but takes a list for `mission-place`; the switch reading made `--tasks a,b` parse `a,b` as a command word.
+const VALUE_FLAGS_BY_COMMAND: readonly { path: readonly string[]; flags: ReadonlySet<string> }[] = [
+  { path: ['orchestration', 'mission-place'], flags: new Set(['tasks']) }
+]
+
+function isValueFlagForCommand(commandPath: readonly string[], flag: string): boolean {
+  return VALUE_FLAGS_BY_COMMAND.some(
+    (entry) =>
+      entry.flags.has(flag) &&
+      entry.path.length <= commandPath.length &&
+      entry.path.every((part, index) => commandPath[index] === part)
+  )
+}
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
@@ -107,7 +125,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     }
 
     const flag = assignment
-    if (BOOLEAN_FLAGS.has(flag)) {
+    if (BOOLEAN_FLAGS.has(flag) && !isValueFlagForCommand(commandPath, flag)) {
       flags.set(flag, true)
       continue
     }
@@ -230,6 +248,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
+    (commandPath.length === 2 && commandPath[0] === 'serve' && commandPath[1] === 'autostart') ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))

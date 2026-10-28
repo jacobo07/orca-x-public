@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isAdvertisedHostServedByPin,
   resolveAdvertisedPairingEndpoint,
   resolveAdvertisedPairingHostname
 } from './pairing-endpoint'
@@ -130,4 +131,35 @@ describe('resolveAdvertisedPairingHostname', () => {
       expect(resolveAdvertisedPairingHostname(input)).toBeNull()
     }
   )
+})
+
+describe('isAdvertisedHostServedByPin (DWS-P2 WR-02)', () => {
+  it.each([
+    ['127.0.0.1', '100.64.1.20'],
+    ['127.0.0.1', '192.168.1.5:6768'],
+    ['127.0.0.1', 'ws://100.64.1.20:6768'],
+    ['127.0.0.1', '::1'],
+    ['127.0.0.1', '127.0.0.2'],
+    ['::1', '127.0.0.1'],
+    ['192.168.1.5', '127.0.0.1'],
+    ['localhost', '100.64.1.20']
+  ])('refuses pin %s advertising %s', (pin, address) => {
+    expect(isAdvertisedHostServedByPin(pin, address)).toBe(false)
+  })
+
+  it.each([
+    ['127.0.0.1', null],
+    ['127.0.0.1', '127.0.0.1'],
+    ['127.0.0.1', '127.0.0.1:8443'],
+    ['127.0.0.1', 'localhost'],
+    ['::1', '[::1]:6768'],
+    ['0:0:0:0:0:0:0:1', '::1'],
+    ['localhost', '127.0.0.1'],
+    ['localhost', '::1'],
+    ['0.0.0.0', '100.64.1.20'],
+    ['192.168.1.5', '192.168.1.5'],
+    ['127.0.0.1', 'wss://tunnel.example.test/orca']
+  ])('admits pin %s advertising %s', (pin, address) => {
+    expect(isAdvertisedHostServedByPin(pin, address)).toBe(true)
+  })
 })

@@ -71,7 +71,7 @@ describe('startup ordering', () => {
       'managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations('
     )
     const serveStart = source.indexOf('if (serveOptions) {', reconciliationStart)
-    const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
+    const serveReady = source.indexOf('await printServeReady(serveOptions', serveStart)
     const serveEnd = source.indexOf('return', serveReady)
     const desktopWindowStart = source.indexOf(
       'const desktopStartup = startWindowsDesktopBeforeShellPathReady('
@@ -257,7 +257,7 @@ describe('startup ordering', () => {
   it('starts the automation scheduler before headless serve reports ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const serveStart = source.indexOf('if (serveOptions) {')
-    const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
+    const serveReady = source.indexOf('await printServeReady(serveOptions', serveStart)
     const serveReturn = source.indexOf('return', serveReady)
     const runtimeRpcStart = source.indexOf('await runtimeRpc.start()', serveStart)
     const automationStart = source.indexOf('automations.start()', serveStart)

@@ -5,6 +5,7 @@ import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
   findLandedUnconfirmedSends,
+  hasPendingTextEchoLanded,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
   normalizeReconcileText,
@@ -20,6 +21,7 @@ import {
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { usePendingAdmissionBound } from './use-mobile-native-chat-admission-bound'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
@@ -108,6 +110,7 @@ export function useMobileNativeChatDrafts(
     Record<string, Record<string, string[]>>
   >({})
   const pendingCounterRef = useRef(0)
+  const armAdmission = usePendingAdmissionBound(setPendingBySession, setPendingWaitingForSession)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
   const activeDraftKeyRef = useRef(draftKey)
@@ -171,8 +174,9 @@ export function useMobileNativeChatDrafts(
           appendMobileNativeChatPending(previous, origin.draftKey, id, origin, text, images)
         )
       }
+      armAdmission(id)
     },
-    [settleSentDraftKey]
+    [armAdmission, settleSentDraftKey]
   )
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
@@ -305,7 +309,7 @@ export function useMobileNativeChatDrafts(
         return item.text.trim() === ''
           ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) <
               item.expectedOccurrence
-          : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) < item.expectedOccurrence
+          : !hasPendingTextEchoLanded(messages, item, landedCounts)
       })
       if (next.length === current.length) {
         return previous

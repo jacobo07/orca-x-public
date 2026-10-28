@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  ExpoTwoWayAudioUnavailableError,
   addExpoTwoWayAudioEventListener,
   initialize,
+  isExpoTwoWayAudioAvailable,
   requestMicrophonePermissionsAsync,
   tearDown,
   toggleRecording
@@ -26,6 +28,7 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
+  const available = useMemo(isExpoTwoWayAudioAvailable, [])
   const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -61,16 +64,18 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
-      try {
-        toggleRecording(false)
-      } catch (err) {
-        // Cleanup must keep going when native recording shutdown throws, or
-        // the wake tag and dictation state would leak.
-        console.error('Failed to stop microphone recording', err)
+      if (available) {
+        try {
+          toggleRecording(false)
+        } catch (err) {
+          // Cleanup must keep going when native recording shutdown throws, or
+          // the wake tag and dictation state would leak.
+          console.error('Failed to stop microphone recording', err)
+        }
       }
       void keepAwakeOwner.release(dictationId ?? undefined).catch(() => undefined)
     },
-    [keepAwakeOwner]
+    [available, keepAwakeOwner]
   )
 
   const failActiveDictation = useCallback(
@@ -90,6 +95,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   )
 
   useEffect(() => {
+    if (!available) {
+      return
+    }
     // Microphone events are a hot path; reuse this wiring instead of allocating
     // a queue object and release predicate for every audio chunk.
     const audioChunkQueue = {
@@ -108,9 +116,12 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
     })
     return () => sub.remove()
-  }, [failActiveDictation, reportError])
+  }, [available, failActiveDictation, reportError])
 
   const start = useCallback(async () => {
+    if (!available) {
+      throw new ExpoTwoWayAudioUnavailableError()
+    }
     const client = clientRef.current
     if (!client || !enabledRef.current || activeIdRef.current) {
       return
@@ -179,7 +190,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         toggleRecording(false)
       }
     })
-  }, [keepAwakeOwner])
+  }, [available, keepAwakeOwner])
 
   const stop = useCallback(async () => {
     const client = clientRef.current
@@ -271,13 +282,16 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   useMobileDictationForegroundKeepAwake(keepAwakeOwner, activeIdRef)
 
   useEffect(() => {
+    if (!available) {
+      return
+    }
     const sub = addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
       if (event.data === 'began' || event.data === 'blocked') {
         void cancel()
       }
     })
     return () => sub.remove()
-  }, [cancel])
+  }, [available, cancel])
 
   useEffect(() => {
     if (!enabled) {
@@ -292,16 +306,17 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       finishingIdRef.current = null
       closeDictationAudio(dictationId)
-      void tearDown()
+      void (available ? tearDown() : undefined)
       if (clientRef.current && dictationId) {
         void clientRef.current
           .sendRequest('speech.dictation.cancel', { dictationId })
           .catch(() => undefined)
       }
     }
-  }, [closeDictationAudio])
+  }, [available, closeDictationAudio])
 
   return {
+    available,
     status,
     isStarting: status === 'starting',
     isRecording: status === 'recording',

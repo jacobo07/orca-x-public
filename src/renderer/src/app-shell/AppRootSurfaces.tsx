@@ -50,6 +50,11 @@ const SshPassphraseDialog = lazy(() =>
     default: module.SshPassphraseDialog
   }))
 )
+const SshHostKeyTrustDialog = lazy(() =>
+  import('../components/settings/SshHostKeyTrustDialog').then((module) => ({
+    default: module.SshHostKeyTrustDialog
+  }))
+)
 const UpdateCard = lazy(() =>
   import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
 )
@@ -131,6 +136,7 @@ export function AppRootSurfaces(props: {
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
+  const hasSshHostKeyTrustRequest = useAppStore((s) => s.sshHostKeyTrustQueue.length > 0)
 
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
@@ -306,6 +312,13 @@ export function AppRootSurfaces(props: {
         <Suspense fallback={null}>
           <ModalBoundary boundaryId="modal.ssh-passphrase" resetKey={activeModal}>
             <SshPassphraseDialog />
+          </ModalBoundary>
+        </Suspense>
+      ) : null}
+      {hasSshHostKeyTrustRequest ? (
+        <Suspense fallback={null}>
+          <ModalBoundary boundaryId="modal.ssh-host-key-trust" resetKey={activeModal}>
+            <SshHostKeyTrustDialog />
           </ModalBoundary>
         </Suspense>
       ) : null}

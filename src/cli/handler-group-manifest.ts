@@ -18,6 +18,26 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
   },
   {
+    name: 'serve-autostart',
+    keys: ['serve autostart install', 'serve autostart remove', 'serve autostart status'],
+    load: async () => (await import('./handlers/serve-autostart.js')).SERVE_AUTOSTART_HANDLERS
+  },
+  {
+    name: 'wake',
+    keys: [
+      'wake target add',
+      'wake target list',
+      'wake target remove',
+      'wake target bind',
+      'wake target unbind',
+      'wake host-key',
+      'wake grant add',
+      'wake grant remove',
+      'wake grant list'
+    ],
+    load: async () => (await import('./handlers/wake.js')).WAKE_HANDLERS
+  },
+  {
     name: 'account',
     keys: ['account add', 'account list'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
@@ -55,9 +75,24 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'project setup-clone',
       'project setup-create',
       'project setup-update',
-      'project setup-delete'
+      'project setup-delete',
+      'project requirements',
+      'project prepare'
     ],
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
+  },
+  {
+    name: 'project-replica',
+    keys: [
+      'project replica-compare',
+      'project replica-capsule',
+      'project replica-capsule-list',
+      'project replica-capsule-restore',
+      'project replica-sync',
+      'project replica-preserve-divergence',
+      'project replica-reconcile'
+    ],
+    load: async () => (await import('./handlers/project-replica.js')).PROJECT_REPLICA_HANDLERS
   },
   {
     name: 'repo',
@@ -118,6 +153,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration task-list',
       'orchestration task-update',
       'orchestration worker-start',
+      'orchestration mission-place',
+      'orchestration mission-results',
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
@@ -191,7 +228,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'fleet',
-    keys: ['fleet placement'],
+    keys: ['fleet placement', 'fleet manifest'],
     load: async () => (await import('./handlers/fleet.js')).FLEET_HANDLERS
   },
   {

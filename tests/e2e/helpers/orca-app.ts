@@ -56,6 +56,9 @@ type OrcaTestFixtures = {
   // memory benchmarks). Prepended before the main entry so Electron forwards
   // them to Chromium without affecting other specs' launches.
   orcaAppExtraArgs: string[]
+  // Why: a persisted record's age cannot be produced through any RPC, so a spec that needs an old
+  // record seeds it into the profile before launch.
+  profileOverlay: Record<string, unknown>
   // Why: a few IPC repro specs need to launch the Electron app with a scoped
   // PATH/token environment. Keep this fixture-owned so tests never mutate the
   // developer's shell or already-running Orca instance.
@@ -176,6 +179,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       launchEnv,
       orcaAppExtraEnv,
       orcaAppExtraArgs,
+      profileOverlay,
       registerPostElectronShutdownCleanup
     },
     provideFixture,
@@ -195,7 +199,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // existing-user upgrade cohort and mount the telemetry notice overlay.
       writeFileSync(
         path.join(userDataDir, 'orca-data.json'),
-        `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+        `${JSON.stringify({ ...getE2ECompletedOnboardingProfile(), ...profileOverlay }, null, 2)}\n`
       )
     }
     const headful = shouldLaunchHeadful(testInfo)
@@ -277,6 +281,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
+  profileOverlay: [{}, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

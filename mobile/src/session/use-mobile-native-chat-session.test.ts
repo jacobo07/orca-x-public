@@ -424,6 +424,34 @@ describe('useMobileNativeChatSession', () => {
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
   })
+
+  // Owner phone, 2026-10-27: trimming the head under a reader removed the row the list was
+  // anchored on, and the view jumped.
+  it('keeps the window head while the reader holds history and trims again once released', async () => {
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        hasMore: true,
+        beforeOffset: 100
+      })
+      return () => {}
+    })
+    await mount({ sendRequest: vi.fn(), subscribe } as unknown as RpcClient)
+
+    act(() => state?.holdHistory(true))
+    await act(async () =>
+      emit({ type: 'appended', messages: [1, 2, 3, 4, 5].map((n) => message(`live-${n}`)) })
+    )
+    expect(state?.messages).toHaveLength(45)
+    expect(state?.messages[0]?.id).toBe('window-0')
+
+    act(() => state?.holdHistory(false))
+    await act(async () => emit({ type: 'appended', messages: [message('live-6')] }))
+    expect(state?.messages).toHaveLength(40)
+    expect(state?.messages.map((entry) => entry.id)).not.toContain('window-0')
+  })
 })
 
 describe('useMobileNativeChatSession transcriptLoading', () => {

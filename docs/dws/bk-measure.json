@@ -1,0 +1,37 @@
+{
+  "model_ids": [
+    "qwen3-coder-30b"
+  ],
+  "n_ctx": 32768,
+  "runs": [
+    {
+      "first_token_s": 1.497,
+      "chunks": 200,
+      "tokens_per_s": 37.81
+    },
+    {
+      "first_token_s": 0.032,
+      "chunks": 200,
+      "tokens_per_s": 48.33
+    },
+    {
+      "first_token_s": 0.028,
+      "chunks": 200,
+      "tokens_per_s": 50.61
+    },
+    {
+      "first_token_s": 0.021,
+      "chunks": 200,
+      "tokens_per_s": 48.88
+    },
+    {
+      "first_token_s": 0.022,
+      "chunks": 200,
+      "tokens_per_s": 49.9
+    }
+  ],
+  "n": 5,
+  "first_token_s_median": 0.028,
+  "tokens_per_s_median": 48.88,
+  "at": "2026-10-18T17:10:52+0200"
+}

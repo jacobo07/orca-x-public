@@ -24,6 +24,21 @@ const DELEGATE_BASELINE_PATH = path.join('config', 'durability-primitive-delegat
 const FAILURE_SEMANTICS_BASELINE_NAME = 'durability-failure-semantics-baseline.txt'
 const FAILURE_SEMANTICS_BASELINE_PATH = path.join('config', FAILURE_SEMANTICS_BASELINE_NAME)
 const SCAN_ROOT = path.join('src', 'main')
+// Fourth list. The delegate ratchet above only sees durable-file-write; a module that publishes
+// through shared/secure-file's durable writer, or calls any other writeDurable* entry point, was
+// invisible to all three, so deleting the contract of device-registry left the gate green.
+const PUBLISHER_BASELINE_PATH = path.join('config', 'durability-contract-publisher-baseline.txt')
+const PUBLISHER_SCAN_ROOT = 'src'
+// Measured 2026-10-01 over src/: a sweep below this is blind, not clean.
+export const MIN_DURABLE_PUBLISHER_CALLERS = 14
+// One module can own several contracts (device-registry owns two), so "some contract names the file"
+// stays green after deleting one of them; these ids must each survive by name.
+export const REQUIRED_CONTRACT_IDS = ['runtime.device-registry', 'runtime.device-revocations']
+// The primitives define these entry points, so their own declarations are not callers.
+const DURABLE_PRIMITIVE_FILES = new Set([
+  'src/shared/secure-file.ts',
+  'src/main/durable-file-write.ts'
+])
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -238,6 +253,41 @@ export async function collectUnclassifiedPrimitiveDelegates(manifest, root) {
   return unclassified.sort()
 }
 
+const DURABLE_PUBLISHER_CALL = /\b(?:writeDurable\w*|writeFileDurable\w*|renameDurable)\s*\(/
+
+/** A module that calls any durable publish entry point. */
+export function looksLikeDurablePublisherCaller(source) {
+  return DURABLE_PUBLISHER_CALL.test(source)
+}
+
+/** Every module under src/ that calls a durable publisher, contracted or not. */
+export async function collectDurablePublisherCallers(manifest, root) {
+  const primitive = manifest?.policy?.durablePrimitive
+  const callers = []
+  for (const relativePath of await collectSourceFiles(root, PUBLISHER_SCAN_ROOT)) {
+    if (DURABLE_PRIMITIVE_FILES.has(relativePath) || relativePath === primitive) {
+      continue
+    }
+    const source = await readFileOrNull(root, relativePath)
+    if (source !== null && looksLikeDurablePublisherCaller(source)) {
+      callers.push(relativePath)
+    }
+  }
+  return callers.sort()
+}
+
+/** Durable publisher callers that no contract names as a writer. */
+export async function collectUncontractedDurablePublishers(manifest, root) {
+  const registered = new Set(
+    (Array.isArray(manifest?.contracts) ? manifest.contracts : [])
+      .filter(isRecord)
+      .flatMap(contractWriters)
+  )
+  return (await collectDurablePublisherCallers(manifest, root)).filter(
+    (relativePath) => !registered.has(relativePath)
+  )
+}
+
 function validatePolicy(manifest, failures) {
   if (!isRecord(manifest.policy)) {
     failures.push('policy must be an object')
@@ -380,6 +430,13 @@ const RATCHETS = [
     noun: 'durable-primitive delegate',
     shape: 'publish state through the shared durable primitive',
     headerShape: 'publish state through src/main/durable-file-write.ts'
+  },
+  {
+    baselinePath: PUBLISHER_BASELINE_PATH,
+    collect: collectUncontractedDurablePublishers,
+    noun: 'durable publisher caller',
+    shape: 'call a durable publish entry point (writeDurable*, writeFileDurable*)',
+    headerShape: 'call a durable publish entry point (writeDurable*, writeFileDurable*)'
   }
 ]
 
@@ -437,7 +494,10 @@ function baselineHeader(ratchet) {
   ].join('\n')
 }
 
-export async function main(root = process.cwd()) {
+export async function main(
+  root = process.cwd(),
+  { minPublisherCallers = 0, requiredContractIds = [] } = {}
+) {
   const manifestPath = path.join(root, MANIFEST_PATH)
   let raw
   try {
@@ -486,6 +546,14 @@ export async function main(root = process.cwd()) {
       }
     }
   }
+  if (failures.length === 0 && isRecord(manifest)) {
+    const ids = new Set(manifest.contracts.filter(isRecord).map((contract) => contract.id))
+    for (const id of requiredContractIds) {
+      if (!ids.has(id)) {
+        failures.push(`${id}: required contract is missing; its writer publishes durably`)
+      }
+    }
+  }
   if (failures.length > 0) {
     console.error(`Durability contract check failed with ${failures.length} issue(s):`)
     for (const failure of failures) {
@@ -494,6 +562,13 @@ export async function main(root = process.cwd()) {
     return 1
   }
 
+  const publisherCallers = await collectDurablePublisherCallers(manifest, root)
+  if (publisherCallers.length < minPublisherCallers) {
+    console.error(
+      `::error::Durable publisher sweep found ${publisherCallers.length} caller(s), expected at least ${minPublisherCallers}; the sweep is blind, not clean.`
+    )
+    return 1
+  }
   const summary = []
   for (const ratchet of RATCHETS) {
     const baselineRaw = await readFileOrNull(root, ratchet.baselinePath)
@@ -572,5 +647,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     process.exit(remaining > 0 ? 1 : 0)
   }
-  process.exit(await main(root))
+  process.exit(await main(root, {
+      minPublisherCallers: MIN_DURABLE_PUBLISHER_CALLERS,
+      requiredContractIds: REQUIRED_CONTRACT_IDS
+    }))
 }

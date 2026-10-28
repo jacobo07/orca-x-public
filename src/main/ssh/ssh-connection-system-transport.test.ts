@@ -55,7 +55,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -76,7 +76,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(conn.canRunConcurrentExecCommands()).toBe(true)
@@ -90,7 +90,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
@@ -107,7 +107,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     await conn.exec('echo after-connect')
     await conn.writeFile('/tmp/after-connect', 'contents')
 
@@ -165,7 +165,7 @@ describe('SshConnection', () => {
       vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
       const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
-      const settled = conn.connect()
+      const settled = conn.connect({ interactive: true })
       await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
 
       await expect(settled).resolves.toBeUndefined()
@@ -246,7 +246,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -269,7 +269,7 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
 
     try {
-      await conn.connect()
+      await conn.connect({ interactive: true })
 
       expect(conn.getState().status).toBe('connected')
       expect(conn.usesSystemSshTransport()).toBe(true)
@@ -291,7 +291,7 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ identityFile: identityPath }), createCallbacks())
 
     try {
-      await conn.connect()
+      await conn.connect({ interactive: true })
 
       expect(conn.usesSystemSshTransport()).toBe(true)
       expect(clientInstances).toHaveLength(0)

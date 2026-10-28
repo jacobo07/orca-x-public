@@ -210,6 +210,18 @@ describe('mobile RPC allowlist', () => {
     expect(unscoped && acceptsEmptyParams(unscoped)).toBe(true)
   })
 
+  it('lets a phone reach the three wake methods and none of the wake admin surface', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      ['host.wake.targets', 'host.wake.request', 'host.wake.status'].filter(
+        (method) => !allowed.has(method)
+      )
+    ).toEqual([])
+    // Positive control: the prefix test below must be able to see a host.* name.
+    expect([...allowed].some((method) => method.startsWith('host.'))).toBe(true)
+    expect([...allowed].filter((method) => method.startsWith('host.wake.admin.'))).toEqual([])
+  })
+
   it('does not grant mobile credentials control over host updates', () => {
     const allowed = mobileRpcAllowlist()
     expect(

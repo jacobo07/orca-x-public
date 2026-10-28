@@ -1,0 +1,464 @@
+{
+  "perFamily": {
+    "vitest": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "tsc": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "esbuild": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "claude": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "codex": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "indexer": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "workload-wrapper": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "orca-cli": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "nonce": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "control-surface": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    }
+  },
+  "workloadTotalPerSampleMb": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "workloadTotal": {
+    "peakMb": 0,
+    "medianMb": 0
+  },
+  "cadence": {
+    "medianMs": 1148,
+    "samples": 239
+  },
+  "freeMb": {
+    "before": 3511.45,
+    "after": 7604.2,
+    "min": 20.7
+  },
+  "instrument": "Win32_Process.WorkingSetSize via Get-CimInstance",
+  "unreadableLines": 0,
+  "patterns": [
+    {
+      "family": "vitest",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "vitest.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "tsc",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "typescript/bin/tsc",
+            "typescript\\bin\\tsc"
+          ]
+        },
+        {
+          "nameEquals": [
+            "tsc.exe"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "esbuild",
+      "rules": [
+        {
+          "nameEquals": [
+            "esbuild.exe"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "claude",
+      "rules": [
+        {
+          "nameEquals": [
+            "claude.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@anthropic-ai/claude-code"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "codex",
+      "rules": [
+        {
+          "nameEquals": [
+            "codex.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@openai/codex"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "indexer",
+      "rules": [
+        {
+          "nameEquals": [
+            "rg.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "tsserver"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "workload-wrapper",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "dws-offload-workload.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "orca-cli",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "out/cli/index.js",
+            "out\\cli\\index.js"
+          ]
+        }
+      ]
+    }
+  ],
+  "desktopSubtreeSize": 1,
+  "harnessSubtreeSize": 0
+}

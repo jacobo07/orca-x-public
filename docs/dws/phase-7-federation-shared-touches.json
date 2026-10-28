@@ -1,0 +1,10 @@
+{
+  "schema": "orca.dws-federation-shared-touches/1",
+  "entries": [
+    {
+      "path": "src/cli/handler-group-manifest.ts",
+      "commits": ["0c35e3422"],
+      "reason": "CLI handler-group registry. The dws edit adds 'fleet manifest' inside the fleet group's own key list; the orchestration group entry federation added in cfa93e8d9 is untouched, so this is a shared registry touch and not a federation subsystem edit."
+    }
+  ]
+}

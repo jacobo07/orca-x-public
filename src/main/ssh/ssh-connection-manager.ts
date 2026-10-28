@@ -24,7 +24,8 @@ export class SshConnectionManager {
     }
   }
 
-  async connect(target: SshTarget): Promise<SshConnection> {
+  // Why: `interactive` is the caller's claim that a person is present to confirm a new host key; timer and resume reconnects never pass it.
+  async connect(target: SshTarget, options?: { interactive?: boolean }): Promise<SshConnection> {
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {
       return existing
@@ -46,7 +47,7 @@ export class SshConnectionManager {
       this.connections.set(target.id, conn)
 
       try {
-        await conn.connect()
+        await conn.connect(options?.interactive ? { interactive: true } : undefined)
       } catch (err) {
         if (this.connections.get(target.id) === conn) {
           this.connections.delete(target.id)

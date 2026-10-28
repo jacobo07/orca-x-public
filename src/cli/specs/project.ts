@@ -12,11 +12,17 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['project', 'setups'],
     summary: 'List project host setups',
-    usage: 'orca project setups [--project <id>] [--host <host-id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
-    notes: ['A setup means a project is available on a host at a concrete filesystem path.'],
+    usage: 'orca project setups [--project <id>] [--host <host-id>] [--all-environments] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'all-environments'],
+    notes: [
+      'A setup means a project is available on a host at a concrete filesystem path.',
+      '--all-environments asks every saved environment (see `orca environment list`) for its setups; read-only, one projectHostSetup.list per environment.',
+      'A server that cannot answer is listed as its own entry: unreachable, unauthorized, unsupported-by-host (its Orca version cannot report setups) or failed (with an error code). Its replicas are unknown, never none.',
+      '--all-environments cannot be combined with --environment or --pairing-code. With --json the result is { ok, result: { status, queried, entries[] } }; each entry has outcome, environment and runtimeId, and answered entries carry setups.'
+    ],
     examples: [
       'orca project setups',
+      'orca project setups --all-environments',
       'orca project setups --project github:stablyai/orca',
       'orca project setups --host local'
     ]
@@ -113,5 +119,35 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'Repo-backed setups remove the registered repo compatibility record.'
     ],
     examples: ['orca project setup-delete --setup github:stablyai/orca::gpu --json']
+  },
+  {
+    path: ['project', 'requirements'],
+    summary: "Measure a repo's orca.yaml requirements on the host that owns it",
+    usage: 'orca project requirements --repo <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo'],
+    notes: [
+      'Only measures: reads orca.yaml and probes the host. No prepare command is ever run.',
+      'A host that cannot be measured is reported by name, never as zero requirements.'
+    ],
+    examples: [
+      'orca project requirements --repo path:/work/app',
+      'orca project requirements --repo id:abc --json'
+    ]
+  },
+  {
+    path: ['project', 'prepare'],
+    summary: "Show or run a repo's declared orca.yaml prepare steps on the host that owns it",
+    usage:
+      'orca project prepare --repo <selector> --plan [--json] | orca project prepare --repo <selector> --requirement <id> --approve <hash> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'plan', 'requirement', 'approve'],
+    notes: [
+      '--plan only prints each declared step with its exact text, labels and the hash that approves it.',
+      '--approve runs exactly one step: the host re-reads orca.yaml and refuses if the text no longer matches the hash.',
+      'Exit code 0 when the step started, 1 when the host refused it.'
+    ],
+    examples: [
+      'orca project prepare --repo path:/work/app --plan',
+      'orca project prepare --repo path:/work/app --requirement node --approve <hash-from-plan>'
+    ]
   }
 ]

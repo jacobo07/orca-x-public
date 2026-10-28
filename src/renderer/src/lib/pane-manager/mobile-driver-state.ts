@@ -36,6 +36,7 @@ function notifyChange(event: DriverChangeEvent): void {
 export function setDriverForPty(ptyId: string, driver: DriverState): void {
   if (driver.kind === 'idle') {
     driverByPtyId.delete(ptyId)
+    desktopInputRefusalsByPtyId.delete(ptyId)
   } else {
     driverByPtyId.set(ptyId, driver)
   }
@@ -65,6 +66,23 @@ export function getAllDrivers(): Map<string, DriverState> {
 
 export function isPtyLocked(ptyId: string): boolean {
   return driverByPtyId.get(ptyId)?.kind === 'mobile'
+}
+
+// Why: the desktop indicator stays quiet by default; a desktop keystroke the lock dropped is
+// the moment the explanation matters, so the overlay expands when this count rises.
+const desktopInputRefusalsByPtyId = new Map<string, number>()
+
+export function noteDesktopInputRefused(ptyId: string): void {
+  const driver = driverByPtyId.get(ptyId)
+  if (driver?.kind !== 'mobile') {
+    return
+  }
+  desktopInputRefusalsByPtyId.set(ptyId, getDesktopInputRefusals(ptyId) + 1)
+  notifyChange({ ptyId, driver })
+}
+
+export function getDesktopInputRefusals(ptyId: string): number {
+  return desktopInputRefusalsByPtyId.get(ptyId) ?? 0
 }
 
 export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]): void {

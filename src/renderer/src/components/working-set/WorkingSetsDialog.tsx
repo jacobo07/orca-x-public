@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import { History, Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -18,6 +19,8 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import type { WorkingSetScopeKey } from '../../../../shared/project-working-set-store-types'
 import { historyStateText, restoredToastText, restoreResultText } from './working-set-copy'
+import { WorkingSetContinueAction } from './WorkingSetContinueAction'
+import { continueOfferFor } from './working-set-continue-targets'
 import { WorkingSetHistoryList } from './WorkingSetHistoryList'
 import { WorkingSetPreviewPanel } from './WorkingSetPreviewPanel'
 import { WorkingSetSaveAction } from './WorkingSetSaveAction'
@@ -48,6 +51,19 @@ function WorkingSetsDialogBody({
   const launchProfiles = useMemo(
     () => launchProfilesForRestore(launchModel.readiness, launchModel.profiles),
     [launchModel.readiness, launchModel.profiles]
+  )
+  const offerState = useAppStore(
+    useShallow((s) => ({
+      repos: s.repos,
+      projects: s.projects,
+      projectHostSetups: s.projectHostSetups,
+      worktreesByRepo: s.worktreesByRepo
+    }))
+  )
+  const { ownerKey, executionHostId } = scope
+  const continueOffer = useMemo(
+    () => continueOfferFor(offerState, { ownerKey, executionHostId }),
+    [offerState, ownerKey, executionHostId]
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [previewRevision, setPreviewRevision] = useState(0)
@@ -148,6 +164,12 @@ function WorkingSetsDialogBody({
           <p className="text-muted-foreground">{disabledReason}</p>
         ) : null}
       </div>
+      <WorkingSetContinueAction
+        scope={scope}
+        offer={continueOffer}
+        workingSetId={selectedId}
+        launchProfiles={launchProfiles}
+      />
 
       <DialogFooter className="gap-2 sm:gap-2">
         <WorkingSetSaveAction

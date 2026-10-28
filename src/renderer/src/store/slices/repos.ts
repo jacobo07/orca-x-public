@@ -25,6 +25,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { buildRootIdentityEligibility } from '../../../../shared/project-root-identity-key'
 import {
   getProjectIdentityKey,
   mergeCatalogCreatedAt,
@@ -547,7 +548,8 @@ async function fetchProjectHostSetupCompatibility(
     }
   } catch {
     // Why: newer clients must hydrate against older runtimes that only know repo.list; derive the transitional model locally.
-    return projectHostSetupProjectionFromRepos(repos)
+    // These repos are one host's, so root identity is not judged here: the conservative repo: derivation.
+    return projectHostSetupProjectionFromRepos(repos, undefined, { identityContext: [] })
   }
 }
 
@@ -669,6 +671,15 @@ function getReposById(repos: readonly Repo[]): Map<string, Repo[]> {
   return reposById
 }
 
+// Why: desktop persistence owns local and direct-SSH rows, so a local refresh is authoritative for
+// both; runtime rows stay owned by their remote Orca server. Setups and projects must share this rule.
+function fetchedCatalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
+  if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return rowHostId === catalogHostId
+  }
+  return rowHostId === LOCAL_EXECUTION_HOST_ID || parseExecutionHostId(rowHostId)?.kind === 'ssh'
+}
+
 function getSourceRepoIdsOutsideHost(
   project: Project,
   reposById: ReadonlyMap<string, readonly Repo[]>,
@@ -676,7 +687,7 @@ function getSourceRepoIdsOutsideHost(
 ): string[] {
   return project.sourceRepoIds.filter((repoId) => {
     const repos = reposById.get(repoId) ?? []
-    return repos.some((repo) => getRepoExecutionHostId(repo) !== hostId)
+    return repos.some((repo) => !fetchedCatalogOwnsHost(hostId, getRepoExecutionHostId(repo)))
   })
 }
 
@@ -927,14 +938,10 @@ function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return setup.hostId === hostId
-    }
-    const owner = parseExecutionHostId(setup.hostId)
-    // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
-  }
+  const catalogOwns = (rowHostId: string): boolean => fetchedCatalogOwnsHost(hostId, rowHostId)
+  const ownsAnyHost = (hostIds: ReadonlySet<string>): boolean => [...hostIds].some(catalogOwns)
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean =>
+    catalogOwns(setup.hostId)
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
     (setup) => !setupBelongsToFetchedCatalog(setup)
@@ -960,7 +967,7 @@ function mergeFetchedProjectCompatibilityForHost({
   )
   const projectHasCurrentOwnerOutsideHost = (project: Project): boolean => {
     for (const ownerHostId of currentProjectOwnerHostIds(project)) {
-      if (ownerHostId !== hostId) {
+      if (!catalogOwns(ownerHostId)) {
         return true
       }
     }
@@ -971,8 +978,8 @@ function mergeFetchedProjectCompatibilityForHost({
       const previousProject = previousProjectById.get(project.id)
       // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
-        fetchedProjectHostIds(project).has(hostId) ||
-        (previousProject ? previousProjectHostIds(previousProject).has(hostId) : false)
+        ownsAnyHost(fetchedProjectHostIds(project)) ||
+        (previousProject ? ownsAnyHost(previousProjectHostIds(previousProject)) : false)
       )
     })
     .map((project) => {
@@ -990,7 +997,7 @@ function mergeFetchedProjectCompatibilityForHost({
   const preservedProjects = previous.projects.filter(
     (project) =>
       !fetchedProjectIds.has(project.id) &&
-      (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
+      (!ownsAnyHost(previousProjectHostIds(project)) || projectHasCurrentOwnerOutsideHost(project))
   )
   // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
   // arrive freshly cloned over IPC), so reconcile against `previous` to recover identity when a
@@ -1072,9 +1079,17 @@ function mergeFetchedReposForHost(
 ): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedRepoIds = new Set(fetchedWithProjectGroups.map((repo) => repo.id))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    if (
+      !fetchedCatalogOwnsHost(hostId, existingHostId) ||
+      fetchedIdentities.has(getRepoHostIdentity(repo))
+    ) {
+      return true
+    }
+    // Why: an SSH row whose id moved host awaits re-adoption evidence; an id gone from the catalog was removed.
+    return existingHostId !== hostId && fetchedRepoIds.has(repo.id)
   })
   return reconcileFetchedRepos(
     previous,
@@ -1084,13 +1099,17 @@ function mergeFetchedReposForHost(
 
 function applyInheritedProjectGroups(previous: readonly Repo[], fetched: readonly Repo[]): Repo[] {
   const projectGroupIdByProject = new Map<string, string | null>()
+  // Why: root identity is judged over every repo seen so far; a fetched row replaces its previous copy.
+  const { eligibleRepoIds } = buildRootIdentityEligibility([
+    ...new Map([...previous, ...fetched].map((repo) => [repo.id, repo])).values()
+  ])
   for (const repo of previous) {
     const projectGroupId =
       repo.projectGroupId === undefined ? undefined : (repo.projectGroupId ?? null)
     if (projectGroupId === undefined) {
       continue
     }
-    const projectId = getProjectIdentityKey(repo)
+    const projectId = getProjectIdentityKey(repo, eligibleRepoIds)
     if (projectId.startsWith('repo:')) {
       continue
     }
@@ -1105,7 +1124,9 @@ function applyInheritedProjectGroups(previous: readonly Repo[], fetched: readonl
     if (repo.projectGroupId !== undefined) {
       return repo
     }
-    const inheritedProjectGroupId = projectGroupIdByProject.get(getProjectIdentityKey(repo))
+    const inheritedProjectGroupId = projectGroupIdByProject.get(
+      getProjectIdentityKey(repo, eligibleRepoIds)
+    )
     if (inheritedProjectGroupId === undefined) {
       return repo
     }

@@ -12,6 +12,11 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
+import { RouteErrorFallback } from '../../src/components/RouteErrorFallback'
+
+// Why: a child route that throws while its module loads has no boundary of its own yet; the
+// group layout's boundary keeps that from finishing the activity.
+export const ErrorBoundary = RouteErrorFallback
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320

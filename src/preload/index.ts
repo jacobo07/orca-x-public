@@ -3200,7 +3200,9 @@ const api = {
     save: (candidate) => ipcRenderer.invoke('workingSet:save', candidate),
     list: (scope) => ipcRenderer.invoke('workingSet:list', scope),
     read: (args) => ipcRenderer.invoke('workingSet:read', args),
-    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
+    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args),
+    transferContinueSessions: (args) =>
+      ipcRenderer.invoke('workingSet:transferContinueSessions', args)
   } satisfies PreloadApi['workingSet'],
   continuity: {
     readDesk: () => ipcRenderer.invoke('continuity:readDesk'),
@@ -3224,6 +3226,15 @@ const api = {
       return () => ipcRenderer.removeListener('durableExit:parkFromMenu', listener)
     }
   } satisfies PreloadApi['durableExit'],
+
+  environment: {
+    measureRequirements: (args) => ipcRenderer.invoke('environment:measureRequirements', args),
+    runPrepareStep: (args) => ipcRenderer.invoke('environment:runPrepareStep', args)
+  } satisfies PreloadApi['environment'],
+  replicaPair: {
+    compare: (args) => ipcRenderer.invoke('replicaPair:compare', args),
+    relations: () => ipcRenderer.invoke('replicaPair:relations')
+  } satisfies PreloadApi['replicaPair'],
 
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
@@ -4571,6 +4582,10 @@ const api = {
     > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    reclaimTerminalIfPhoneIdle: (
+      ptyId: string
+    ): Promise<{ reclaimed: boolean; retryAfterMs?: number }> =>
+      ipcRenderer.invoke('runtime:reclaimTerminalIfPhoneIdle', { ptyId }),
     reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
       ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
     onTerminalFitOverrideChanged: (
@@ -4889,7 +4904,38 @@ const api = {
     },
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
-      ipcRenderer.invoke('ssh:submitCredential', args)
+      ipcRenderer.invoke('ssh:submitCredential', args),
+
+    onHostKeyTrustRequest: (
+      callback: (data: {
+        requestId: string
+        targetId: string
+        label: string
+        host: string
+        port: number
+        offeredFingerprint: string
+        algorithm?: string
+        previousFingerprint?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: Parameters<typeof callback>[0]) =>
+        callback(data)
+      ipcRenderer.on('ssh:host-key-trust-request', listener)
+      return () => ipcRenderer.removeListener('ssh:host-key-trust-request', listener)
+    },
+
+    onHostKeyTrustResolved: (callback: (data: { requestId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }) =>
+        callback(data)
+      ipcRenderer.on('ssh:host-key-trust-resolved', listener)
+      return () => ipcRenderer.removeListener('ssh:host-key-trust-resolved', listener)
+    },
+
+    submitHostKeyTrust: (args: { requestId: string; trust: boolean }): Promise<void> =>
+      ipcRenderer.invoke('ssh:submitHostKeyTrust', args),
+
+    replaceHostKeyPin: (args: { targetId: string; expectedPreviousFingerprint: string }) =>
+      ipcRenderer.invoke('ssh:replaceHostKeyPin', args)
   },
 
   automations: {

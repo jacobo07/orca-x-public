@@ -1,0 +1,18 @@
+{
+  "verdict": {
+    "value": "unknown",
+    "reason": "firmware_unverified",
+    "evidence": null
+  },
+  "adapterRows": [
+    {
+      "name": "Ethernet",
+      "interfaceDescription": "Realtek PCIe GbE Family Controller",
+      "mediaType": "802.3",
+      "wakeOnMagicPacket": "Enabled"
+    }
+  ],
+  "armedCount": 6,
+  "rawArmedLines": 6,
+  "observedAt": 1793132839750
+}

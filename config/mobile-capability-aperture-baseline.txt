@@ -136,6 +136,9 @@ emulator.shutdown
 emulator.tap
 emulator.type
 emulator.unregisterActive
+# Added 2026-10-18, a mobile gap, not by design: host environment preparation (DWS-20). The handlers accept remote callers and runPrepareStep already requires the approved content hash and host key, so a phone could request it behind that approval; no mobile surface yet. Audit: environment.*, measured-open.
+environment.measureRequirements
+environment.runPrepareStep
 files.commitUpload
 files.copy
 files.createDir
@@ -151,6 +154,10 @@ files.watch
 files.write
 files.writeBase64
 files.writeBase64Chunk
+# Added 2026-09-30, local-caller only by design: same fan-out as fleet.placementView below.
+fleet.nodeManifests
+# Added 2026-09-30, read-only, measures only its own host; a paired peer's copy adds nothing mobile shows.
+fleet.nodeResources
 # Added 2026-09-18, local-caller only by design: answering makes this host query its own paired
 # runtimes with its own credentials, so the handler refuses every remote caller by context.
 fleet.placementView
@@ -179,6 +186,15 @@ gitlab.listMRs
 gitlab.rateLimit
 gitlab.retryJob
 gitlab.updateMRReviewers
+# Added 2026-10-28, host-only by design: LAN Wake Broker administration (targets, MACs, grants, the host-key readout). The handlers refuse every remote caller (remote_caller_refused) and the CLI refuses the SSH relay, so a phone can never register a MAC or grant itself wake. Phones use host.wake.targets/request/status instead.
+host.wake.admin.grantAdd
+host.wake.admin.grantList
+host.wake.admin.grantRemove
+host.wake.admin.hostKey
+host.wake.admin.targetAdd
+host.wake.admin.targetBind
+host.wake.admin.targetList
+host.wake.admin.targetRemove
 jira.addIssueComment
 jira.connect
 jira.createIssue
@@ -233,8 +249,15 @@ orchestration.gateCreate
 orchestration.gateList
 orchestration.gateResolve
 orchestration.inbox
+# Added 2026-10-18, host-only by design: placement has this host observe its own paired runtimes, so the handler refuses every remote caller (remote_caller_refused).
+orchestration.missionPlace
+# Added 2026-10-18, a mobile gap, not by design: same family as orchestration.* (measured-open P1 in the audit). The handlers accept remote callers; mobile has no surface to read mission placements or to request and inspect reviews.
+orchestration.missionResults
 orchestration.reply
 orchestration.reset
+# Added 2026-10-18, a mobile gap, not by design: same family as orchestration.* (measured-open P1 in the audit). The handlers accept remote callers; mobile has no surface to read mission placements or to request and inspect reviews.
+orchestration.reviewRequest
+orchestration.reviewShow
 orchestration.run
 orchestration.runCreate
 orchestration.runCurrent
@@ -277,6 +300,19 @@ projectHostSetup.delete
 projectHostSetup.list
 projectHostSetup.setupExistingFolder
 projectHostSetup.update
+# Added 2026-10-15, host-only by design: answering would operate on this host's worktrees and refs on another client's behalf, so the handlers refuse every remote caller.
+projectReplica.capsuleCreate
+projectReplica.capsuleList
+projectReplica.capsuleRestore
+# Added 2026-10-15, host-only by design: it uses this host's SSH session, so the handler refuses every remote caller.
+projectReplica.compare
+# Added 2026-10-15, host-only by design: answering would move a branch or write refs in this host's repositories on another client's behalf, so the handlers refuse every remote caller.
+projectReplica.preserveDivergence
+projectReplica.reconcile
+# Added 2026-10-15, host-only by design: its answers come from this host's SSH session, so the handler refuses every remote caller.
+projectReplica.relations
+# Added 2026-10-15, host-only by design: answering would move a branch or write refs in this host's repositories on another client's behalf, so the handler refuses every remote caller.
+projectReplica.sync
 repo.add
 repo.clone
 repo.create
@@ -306,6 +342,7 @@ skills.share
 skills.uploadChunk
 terminal.getDisplayMode
 terminal.inspectProcess
+terminal.reclaimIfPhoneIdle
 terminal.recoverPane
 terminal.resizeForClient
 terminal.resolveActive
@@ -322,6 +359,9 @@ updater.getStatus
 updater.install
 workspacePorts.kill
 workspacePorts.scan
+# Added 2026-09-30, desktop-only by design: Cancel Workstream refuses (UWCP uwcp.control/1 unbuilt), and a
+# mobile client has no consent surface for cancelling a Workstream; revisit when UWCP control lands.
+workstream.cancel
 worktree.detectedList
 worktree.lineageList
 worktree.list

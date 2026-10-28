@@ -69,7 +69,8 @@ export function installTerminalTestGlobals(): void {
         playSound: vi.fn().mockResolvedValue({ played: true })
       },
       runtime: {
-        restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
+        restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true }),
+        reclaimTerminalIfPhoneIdle: vi.fn().mockResolvedValue({ reclaimed: false })
       },
       agentStatus: {
         inferInterrupt: vi.fn().mockResolvedValue(false)
