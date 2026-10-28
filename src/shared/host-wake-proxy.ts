@@ -161,7 +161,7 @@ export function composeHostWakeRoute(input: {
 const HOST_PUBLIC_KEY_TEXT = /^[A-Za-z0-9+/]+={0,2}$/
 const HOST_PUBLIC_KEY_BYTES = 32
 
-// Why re-pad: Buffer ignores padding but atob demands it; a dangling sextet never completes 32 bytes.
+// Why strip then re-pad: Buffer ignores any `=`, atob throws on a stray one; canonical padding reads alike everywhere.
 function decodeHostPublicKey(publicKeyB64: string): Uint8Array | null {
   const data = publicKeyB64.replace(/=+$/, '')
   if (data.length % 4 === 1) {
