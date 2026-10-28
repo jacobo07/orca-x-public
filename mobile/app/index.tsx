@@ -284,7 +284,7 @@ export default function HomeScreen() {
     client: entry.client
   }))
   // Why: per-session evidence only (D-03); broker answers and wakes never reach the home snapshot.
-  const { wakeFor, pressWake } = useHostCardWake({
+  const { wakeFor, pressWake, refreshWakes } = useHostCardWake({
     allClientsRef,
     hostStates,
     hostLastConnected,
@@ -367,10 +367,11 @@ export default function HomeScreen() {
           fetchTaskProviders(entry.client, entry.hostId, setTaskProvidersByHost, () => stale)
         }
       }
+      refreshWakes(() => stale)
       return () => {
         stale = true
       }
-    }, [router])
+    }, [router, refreshWakes])
   )
 
   const sortedHosts = useMemo(

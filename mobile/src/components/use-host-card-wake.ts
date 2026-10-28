@@ -6,6 +6,8 @@ import {
   hostKeyOfPublicKey,
   hostsAskableForWakeTargets,
   pressHostWake,
+  readHostWakeStatus,
+  wakesToRefresh,
   type HomeHostWakeTargetsSnapshot,
   type HostWakeClientEntry
 } from '../transport/home-host-wake-session'
@@ -18,6 +20,7 @@ type TargetsByHost = Record<string, HomeHostWakeTargetsSnapshot>
 export type HostCardWakeSession = {
   wakeFor: (host: WakeCardHost) => HostCardWakeInputs
   pressWake: (host: WakeCardHost) => void
+  refreshWakes: (disposed: () => boolean) => void
 }
 
 // Why React state only: broker answers and wakes prove something for this session alone (D-03).
@@ -30,6 +33,9 @@ export function useHostCardWake(input: {
   const { allClientsRef, hostStates, hostLastConnected, hostStatusSnapshots } = input
   const [targetsByHost, setTargetsByHost] = useState<TargetsByHost>({})
   const [attempts, setAttempts] = useState<Record<string, HostCardWakeAttempt>>({})
+  // Why a ref: the focus callback stays stable yet reads the latest attempts.
+  const attemptsRef = useRef(attempts)
+  attemptsRef.current = attempts
   const askedAtRef = useRef(new Map<string, number>())
   const inFlightRef = useRef(new Set<string>())
   const unmountedRef = useRef(false)
@@ -108,5 +114,29 @@ export function useHostCardWake(input: {
     [allClientsRef, brokers]
   )
 
-  return { wakeFor, pressWake }
+  // Why no timer: progress is re-read on focus; the target's own reconnect supplies host-announced (D-07).
+  const refreshWakes = useCallback(
+    (disposed: () => boolean) => {
+      for (const { targetHostId, attempt } of wakesToRefresh(attemptsRef.current)) {
+        const broker = allClientsRef.current.find((entry) => entry.hostId === attempt.brokerHostId)
+        if (!broker || broker.client.getState() !== 'connected') {
+          continue
+        }
+        void readHostWakeStatus({ client: broker.client, attempt }).then((next) => {
+          if (disposed() || unmountedRef.current) {
+            return
+          }
+          // Why match requestId: an older read must not overwrite a newer press on the same card.
+          setAttempts((prev) =>
+            prev[targetHostId]?.requestId === attempt.requestId
+              ? { ...prev, [targetHostId]: next }
+              : prev
+          )
+        })
+      }
+    },
+    [allClientsRef]
+  )
+
+  return { wakeFor, pressWake, refreshWakes }
 }

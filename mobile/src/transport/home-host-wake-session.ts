@@ -210,3 +210,54 @@ export function pressHostWake(input: {
     onPressed: input.onPressed
   })
 }
+
+// Why repliedAt stays: the press reply is the phone-observed anchor the presenter rebases stages to.
+export async function readHostWakeStatus(input: {
+  client: RpcClient
+  attempt: HostCardWakeAttempt
+}): Promise<HostCardWakeAttempt> {
+  const { attempt } = input
+  if (attempt.wakeId === null) {
+    return attempt
+  }
+  let response: RpcResponse
+  try {
+    response = await input.client.sendRequest('host.wake.status', { wakeId: attempt.wakeId })
+  } catch {
+    // Why keep: a read that never answered says nothing about the wake.
+    return attempt
+  }
+  if (!response.ok) {
+    return { ...attempt, refusalCode: refusalCodeOf(response.error) }
+  }
+  const result = isRecord(response.result) ? response.result : {}
+  return { ...attempt, brokerStages: result.stages }
+}
+
+function brokerStageNames(brokerStages: unknown): string[] {
+  if (!Array.isArray(brokerStages)) {
+    return []
+  }
+  return brokerStages.flatMap((record: unknown) =>
+    isRecord(record) && typeof record.stage === 'string' ? [record.stage] : []
+  )
+}
+
+// Why: a refusal or a failed send is final; a sent packet still waits for the target's own answer.
+export function isWakeAttemptTerminal(attempt: HostCardWakeAttempt): boolean {
+  return (
+    attempt.refusalCode !== null ||
+    brokerStageNames(attempt.brokerStages).includes('packet-send-failed')
+  )
+}
+
+export type HostWakeRefresh = { targetHostId: string; attempt: HostCardWakeAttempt }
+
+// Why: focus re-reads only a wake the broker named and that can still change.
+export function wakesToRefresh(attempts: Record<string, HostCardWakeAttempt>): HostWakeRefresh[] {
+  return Object.entries(attempts).flatMap(([targetHostId, attempt]) =>
+    attempt.repliedAt !== null && attempt.wakeId !== null && !isWakeAttemptTerminal(attempt)
+      ? [{ targetHostId, attempt }]
+      : []
+  )
+}
