@@ -186,7 +186,7 @@ Plans:
 Plans:
 
 - [x] 21-01-PLAN.md — broker binding by hostKey (sha256 of the host E2EE key): store/schema (no bump), `host.wake.targets` additive hostKey (no MAC), local-only `host.wake.admin.targetBind` + `host.wake.admin.hostKey`, CLI `orca wake target bind|unbind` and `orca wake host-key` (wave 1)
-- [ ] 21-02-PLAN.md — shared route composer `composeHostWakeRoute` (one bound broker from this session's answers, `ambiguous_broker` refused, nothing persisted) + phone-side hostKey derivation proven equal to the host fingerprint, pinned vector (wave 2)
+- [x] 21-02-PLAN.md — shared route composer `composeHostWakeRoute` (one bound broker from this session's answers, `ambiguous_broker` refused, nothing persisted) + phone-side hostKey derivation proven equal to the host fingerprint, pinned vector (wave 2)
 - [ ] 21-03-PLAN.md — claims gate first: per-control effect-wording scope replaces the card-wide short-circuit, `wake` label family and observer rule (target-only host-announced/runtime-ready) in a sibling .mjs, `wakeModel` (wave 2)
 - [ ] 21-04-PLAN.md — `host-card-wake` Pressable (sibling, no confirm) + 19 `wake.*` labels and `presentHostCardWake` (phone-rebased stages, closed refusal table), jsonc classification, success line 41/3 pinned with notes; GEX44 render tests (wave 3)
 - [ ] 21-05-PLAN.md — per-session broker answers, press to the routed broker with a fresh requestId, focus re-reads (no timer), refusals outside the revocation latch, index.tsx wiring; GEX44 full run (wave 4)
