@@ -118,9 +118,13 @@ emit `supported` only under an evidence allowance whose kinds it quotes; `can-wa
 a card control whose wording promises an effect (such as "Wake") without a host RPC behind it, judged
 per control: the wording must sit inside the innermost control classified `effect`. The card now has
 3 controls, `host-card-open` and `host-card-actions` (navigation) and `host-card-wake` (effect,
-`host.wake.request`), and 19 `wake.*` labels, each naming its observer (G7). The full success line:
+`host.wake.request`), and 20 `wake.*` labels, each naming its observer (G7). G8
+(`config/scripts/host-card-copy-reach.mjs`) applies the woken-wording and effect-wording rules to
+every module the card renders copy from: the presenter outside its label table, the presenter's
+helpers and the card's child components (relative imports inside `mobile/src/components`); the
+header of `config/host-card-claims.jsonc` lists what the scan cannot follow. The full success line:
 
-`check-host-card-claims: 41 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
+`check-host-card-claims: 42 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned, 4 card copy modules scanned.`
 
 ## Binding a broker target to a host
 
@@ -140,7 +144,11 @@ to the wrong machine. The route is composed by `composeHostWakeRoute` in
 - an old broker that sends no `hostKey` binds nothing, so the card draws no control;
 - two bindings for one host (two brokers, or two targets on one broker) are ambiguous, so the card
   draws no control and reads "Wake unavailable: ambiguous broker";
-- a host whose own current answer reads awake gets no control.
+- a host whose own current answer reads awake gets no control;
+- a press sends the card's own `hostKey` with `host.wake.request`. A broker whose target is no
+  longer bound to that key refuses `wake_target_rebound` and sends nothing, so a stale targets
+  answer cannot wake a host the Owner rebound. An older broker drops the unknown field and wakes as
+  before; a request without the field keeps today's behaviour.
 
 After a press the card shows the broker's stages (`requested`, `authorized`, `packet-sent` or
 `packet-send-failed`, each rebased to the phone's reply time) and each refusal code as its own

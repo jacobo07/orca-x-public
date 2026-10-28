@@ -62,7 +62,7 @@ Gates, all exit 0:
 - `pnpm run typecheck:node`: rc=0
 - `pnpm run typecheck:cli`: rc=0
 - `pnpm exec tsc --noEmit -p config/tsconfig.tc.web.json`: rc=0
-- `pnpm run check:host-card-claims`: `check-host-card-claims: 41 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
+- `pnpm run check:host-card-claims`: `check-host-card-claims: 42 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned, 4 card copy modules scanned.` (current line since 21-REVIEW batch B, which added `wake.wake_target_rebound` and the G8 card copy reach; at this verification's HEAD it read 41 labels and had no card copy count)
 - `pnpm run check:recurring-work`: `Recurring-work inventory OK [total=236 interval=48 watcher=8 self-rescheduling-timeout=102 worker=13 helper=36 self-rescheduling-frame=29] debt=0`.
   The count is unchanged since phase 20, so phase 21 added no timer under `src/`.
 - `pnpm run check:durability-contracts`: `Durability contract check passed for 22 contract(s); 19 grandfathered durability publisher(s); 38 grandfathered direct state writer(s); 2 grandfathered durable-primitive delegate(s); 4 grandfathered durable publisher caller(s); no new ones.`
