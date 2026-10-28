@@ -32,7 +32,7 @@ findings:
   info: 2
   total: 7
 status: issues_found
-fix_status: batch_a_fixed
+fix_status: warnings_fixed
 ---
 
 # Phase 21: Code Review Report
@@ -270,3 +270,59 @@ Evidence (exact lines):
   - `check:durability-contracts` exit 0.
 
 Still owed: the phone leg. A real phone, or a labelled emulator, must press Wake on a sleeping, bound host. It stays human_needed.
+
+## Fix Log (batch B)
+
+Scope: WR-03, WR-04 and IN-01. Batch A (CR-01, WR-01, WR-02, IN-02) is untouched; its rows were re-run green below.
+Work tree `C:\owx-haf`, branch `mobile/host-availability`. Laptop runs were single named vitest files, typechecks and
+gates. Mobile runs went to GEX44 through the phase 18 runner in disposable roots. These are UNIT, GATE and MUTANT
+results; none of them is phone evidence.
+
+| Commit | Kind | Finding | Change |
+|---|---|---|---|
+| `1660caeed` | RED | IN-01 | `src/cli/handlers/wake.test.ts`: all three refusal paths of `wake host-key` (bridged shell, `--environment`, remote runtime) must name the host to be woken and never the broker; control: `wake grant list` still names the broker host. |
+| `ae0a5d3e5` | GREEN | IN-01 | `assertWakeRunsLocally(ctx, env, verb)` picks the command label (`orca wake host-key (read on the host to be woken)`) for `assertLocalInvocation` and the machine named by the two retarget refusals, per verb. |
+| `21fbdc8a1` | RED | WR-03 | Broker rows in `host-wake.test.ts` (mismatched key, key for an unbound target, matching key, no key, replay after a rebind); phone rows (plan and wire params carry the card key); presenter rows (twelve phone refusal codes, own warning label, 42/20 table); gate pin 42 labels. |
+| `5eeacea5b` | GREEN | WR-03 | `host.wake.request` takes an optional `hostKey` (`HOST_KEY_FORM`). `judgeBinding` refuses `wake_target_rebound` at the request and again at the effect-moment re-judge when the target's current `hostKey` differs; no key keeps today's behaviour. The code is in `HOST_WAKE_REFUSAL_CODES`, so it passes through `mapRuntimeError`. The phone's press plan carries the card key and `requestHostWake` always sends it. New label `wake.wake_target_rebound` "Wake refused: target bound to another host", classified (observer broker). |
+| `fdce955ca` | test | WR-03 | The presenter text-law row counts 18 broker/phone wake labels (pin missed by the RED commit; the GEX44 run at `5eeacea5b` failed 1/124 on that count alone). |
+| `af10c7ca8` | RED | WR-04 | New `config/scripts/host-card-copy-reach.test.mjs` (9 rows: each leak path red with a green twin, a split identifier `host-woken`, a transitive presenter helper, a child component, a boundary row); success-line pin and shape end `4 card copy modules scanned.` |
+| `c36a2e0a5` | test | WR-03 | The G7 non-vacuity row expects 20 wake labels (second pin the WR-03 RED commit missed; seen in the WR-04 RED run). |
+| `6228dcc3d` | GREEN | WR-04 | G8 `config/scripts/host-card-copy-reach.mjs` (133 lines), called from the gate (596 lines): card, presenter and every module they reach by relative imports inside the card's directory (today `StatusDot.tsx`, `host-card-wake-stage.ts`). No copy outside `HOST_CARD_LABELS` may read as woken; effect wording in a child `.tsx` passes only inside a backed effect control (G5 scope), in a `.ts` module it fails. Known limits are listed in the `config/host-card-claims.jsonc` header. |
+| `b83935d3d` | docs | all | Pinned line updated in `docs/reference/host-wake-broker.md` (also the press `hostKey` rule and G8), `20-VERIFICATION.md`, `21-VERIFICATION.md`, STATE.md current-position and resume lines; P21-H1/G1/G2 appended to `21-06-MUTANTS.md`. |
+
+Wire compatibility (remote-wire-compatibility.md): `hostKey` is a new optional request field. The dispatcher runs
+`method.params.safeParse`, and `z.object` strips unknown keys, so an old broker drops it and wakes as before; that is
+the accepted degrade, and the check exists only on new brokers. `wake_target_rebound` is only ever sent to a caller
+that sent `hostKey`, so no old phone can receive it; an unknown code would still render `wake.unknown`.
+
+Evidence (exact lines):
+- UNIT laptop IN-01: RED at `1660caeed` `Tests 1 failed | 51 passed (52)`; GREEN `Tests 52 passed (52)`, `typecheck:cli` rc=0.
+- UNIT laptop WR-03 RED (tree = `21fbdc8a1`): `Tests 4 failed | 45 passed (49)` (the three refusal rows `expected true to be false`, plus the 42-label pin).
+- UNIT GEX44 WR-03 RED at `21fbdc8a1` (no sync), root `/tmp/orca-phone-p18-20261028T165609Z`: `Tests 6 failed | 102 passed (108)`, `RUNNER result=FAIL`, `TEARDOWN procs=0 root=absent`, `PROOF ROOT_ABSENT_CONFIRMED`, `LOCAL exit=1`.
+- UNIT laptop WR-03 GREEN: `Test Files 4 passed (4)`, `Tests 63 passed (63)`; `typecheck:node`, `typecheck:cli`, `typecheck:web` rc=0.
+- UNIT GEX44 full at `5eeacea5b`, root `/tmp/orca-phone-p18-20261028T165914Z`: `Tests 1 failed | 123 passed (124)` (text-law count 17), `RUNNER tsc_errors_total=3 tsc_errors_preexisting=3 tsc_errors_touched=0`, `RUNNER result=FAIL`, `TEARDOWN procs=0 root=absent`, `PROOF ROOT_ABSENT_CONFIRMED`, `LOCAL exit=1`.
+- UNIT/GATE GEX44 full at `fdce955ca` (no sync; no mobile file changed after it), root `/tmp/orca-phone-p18-20261028T170033Z`:
+  - `Test Files 3 passed (3)`, `Tests 124 passed (124)` over the session test, the presenter test and `MobileHostCard.test.tsx`;
+  - `RUNNER oxlint_rc=0 oxfmt_rc=0`; `RUNNER tsc_errors_total=3 tsc_errors_preexisting=3 tsc_errors_touched=0` (MermaidDiagram, terminal-webview-html, mobile-workspace-client, as before);
+  - `RUNNER result=PASS`, `TEARDOWN procs=0 root=absent`, `PROOF ROOT_ABSENT_CONFIRMED`, `LOCAL exit=0`.
+- UNIT laptop WR-04 RED at `af10c7ca8`: `Tests 12 failed | 60 passed (72)` (all 9 reach rows, the success-line pin and shape, and the G7 count row).
+- UNIT laptop WR-04 GREEN: `Test Files 4 passed (4)`, `Tests 104 passed (104)` over the four gate test files.
+- MUTANT P21-H1, P21-G1, P21-G2: each CAUGHT and RESTORE_VERIFIED by byte copy (21-06-MUTANTS.md, batch B section).
+- Final laptop re-run at `b83935d3d`: 8 named files `Test Files 8 passed (8)`, `Tests 226 passed (226)` (wake CLI, host-wake, targets-reply contract, host-wake-proxy, and the four gate test files); `typecheck:node`, `typecheck:cli`, `typecheck:web` rc=0.
+- GATE laptop at `b83935d3d`:
+  - `check-host-card-claims: 42 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned, 4 card copy modules scanned.`
+  - `Recurring-work inventory OK [total=236 interval=48 watcher=8 self-rescheduling-timeout=102 worker=13 helper=36 self-rescheduling-frame=29] debt=0` (no timer added).
+  - `check:durability-contracts` exit 0 (22 contracts, no new ones).
+  - `git diff --quiet -- src config mobile` exit 0.
+
+Incidents, stated plainly:
+- The first IN-01 RED invocation passed the file list to vitest as a splatted string, so it ran the whole laptop suite
+  for several minutes before it was killed (all its node processes stopped, none left). It made no commit. It left an
+  untracked `NUL` file in `C:\owx-haf`, which was deleted; `git status` was clean apart from the edited test afterwards.
+  The helper now takes an array and refuses a short entry.
+- lint-staged's oxfmt rewrote `src/cli/handlers/wake.ts` and `src/main/runtime/wake-broker.ts` with LF where autocrlf
+  checks out CRLF, so `git status` listed them as modified with no content diff (`git diff --stat` empty,
+  `diff --quiet` 0). Both were re-checked-out only after `diff --quiet` returned 0.
+
+Residual: WR-03's check needs a new broker; a new phone against an old broker wakes as before (accepted degrade). G8
+is a text scan; what it cannot follow is listed in the jsonc header. Still owed: the phone leg (human_needed).
