@@ -156,3 +156,41 @@ export function composeHostWakeRoute(input: {
   }
   return { send: true, ...matches[0] }
 }
+
+// Same text and size rules as fingerprintHostPublicKey (src/main/runtime/host-key-fingerprint.ts).
+const HOST_PUBLIC_KEY_TEXT = /^[A-Za-z0-9+/]+={0,2}$/
+const HOST_PUBLIC_KEY_BYTES = 32
+
+// Why re-pad: Buffer ignores padding but atob demands it; a dangling sextet never completes 32 bytes.
+function decodeHostPublicKey(publicKeyB64: string): Uint8Array | null {
+  const data = publicKeyB64.replace(/=+$/, '')
+  if (data.length % 4 === 1) {
+    return null
+  }
+  const binary = atob(data.padEnd(Math.ceil(data.length / 4) * 4, '='))
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return bytes
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// Why the digest is a parameter: sha256 is node:crypto on the host and @noble/hashes on the phone.
+export function hostKeyFromPublicKeyB64(
+  publicKeyB64: string,
+  digest: (bytes: Uint8Array) => Uint8Array
+): string | null {
+  if (!HOST_PUBLIC_KEY_TEXT.test(publicKeyB64)) {
+    return null
+  }
+  const bytes = decodeHostPublicKey(publicKeyB64)
+  return bytes?.length === HOST_PUBLIC_KEY_BYTES ? encodeBase64Url(digest(bytes)) : null
+}
