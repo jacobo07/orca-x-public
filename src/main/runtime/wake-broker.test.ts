@@ -238,7 +238,43 @@ describe('wake broker', () => {
     expect(h.sends).toHaveLength(0)
     const stages = (refusal.data as { stages: HostWakeStageRecord[] }).stages
     everyStage.push(...stages)
-    expect(stages.map((s) => s.stage)).toEqual(['requested', 'authorized'])
+    expect(stages.map((s) => s.stage)).toEqual(['requested', 'authorized', 'packet-send-failed'])
+    expect(stages.at(-1)?.code).toBe('wake_device_revoked')
+  })
+
+  it('ends a wake refused at the effect re-judge for every other granted device (IN-01)', async () => {
+    let devACalls = 0
+    h = harness({
+      authorize: (token) => {
+        if (token === 'tok-b') {
+          return { ok: true, deviceId: 'dev-b' }
+        }
+        return ++devACalls === 1
+          ? { ok: true, deviceId: 'dev-a' }
+          : { ok: false, reason: 'device_revoked' }
+      }
+    })
+    const refusal = await refusalCode(() =>
+      h.broker.request({ ...A, targetId: T1.targetId, requestId: 'req-rejudge-1' })
+    )
+    expect(refusal.code).toBe('wake_device_revoked')
+    const { wakeId } = refusal.data as { wakeId: string }
+    const seenByB = h.broker.status({ ...B, wakeId })
+    expect(seenByB.stages.map((s) => s.stage)).toEqual([
+      'requested',
+      'authorized',
+      'packet-send-failed'
+    ])
+    expect(seenByB.stages.at(-1)?.code).toBe('wake_device_revoked')
+    expect(h.sends).toHaveLength(0)
+    const retry = await h.broker.request({
+      ...B,
+      targetId: T1.targetId,
+      requestId: 'req-rejudge-1'
+    })
+    expect(retry).toMatchObject({ replayed: false, adopted: false })
+    expect(retry.wakeId).not.toBe(wakeId)
+    expect(h.sends).toHaveLength(1)
   })
 
   it('records packet-send-failed with the error code and refuses with wake_send_failed', async () => {
@@ -249,7 +285,8 @@ describe('wake broker', () => {
       h.broker.request({ ...A, targetId: T1.targetId, requestId: 'req-fail-1' })
     )
     expect(refusal.code).toBe('wake_send_failed')
-    const { wakeId } = refusal.data as { wakeId: string }
+    const { wakeId, stages } = refusal.data as { wakeId: string; stages?: HostWakeStageRecord[] }
+    expect(stages?.map((s) => s.stage)).toEqual(['requested', 'authorized', 'packet-send-failed'])
     const status = h.broker.status({ ...A, wakeId })
     expect(status.stages.map((s) => s.stage)).toEqual([
       'requested',
