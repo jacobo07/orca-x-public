@@ -126,7 +126,8 @@ describe('wake broker store', () => {
 
   it.each([
     ['unparseable', '{"schema":1,"targets":['],
-    ['wrong schema', JSON.stringify({ schema: 2, targets: [], grants: [] })]
+    ['non-numeric schema', JSON.stringify({ schema: '1', targets: [], grants: [] })],
+    ['schema 0', JSON.stringify({ schema: 0, targets: [], grants: [] })]
   ])('fails closed on a %s file and preserves its bytes as .corrupt-<ms>', (_name, bytes) => {
     writeFileSync(stateFile(), bytes)
     const publisher = recordingPublisher()
@@ -135,6 +136,36 @@ describe('wake broker store', () => {
     expect(existsSync(stateFile()), 'something was published over the unreadable file').toBe(false)
     expect(readFileSync(`${stateFile()}.corrupt-${NOW}`, 'utf-8')).toBe(bytes)
     expect(publisher.published).toHaveLength(0)
+  })
+
+  it('refuses a newer schema and leaves the file untouched, never moved aside (IN-04)', () => {
+    const bytes = JSON.stringify({ schema: 2, targets: [{ futureShape: true }], grants: [] })
+    writeFileSync(stateFile(), bytes)
+    const publisher = recordingPublisher()
+    const loaded = loadWakeBrokerStore(dir, { publish: publisher.publish, now: () => NOW })
+    expect(loaded).toEqual({ ok: false, reason: 'wake_broker_state_newer_schema' })
+    expect(readFileSync(stateFile(), 'utf-8')).toBe(bytes)
+    expect(readdirSync(dir).filter((name) => name.includes('.corrupt-'))).toEqual([])
+    expect(publisher.published).toHaveLength(0)
+  })
+
+  it('reports a previously moved-aside state on the next start instead of a silent empty store (IN-04)', () => {
+    writeFileSync(stateFile(), '{"schema":1,"targets":[')
+    expect(loadWakeBrokerStore(dir, { now: () => NOW })).toEqual({
+      ok: false,
+      reason: 'wake_broker_state_unreadable'
+    })
+    const next = loadWakeBrokerStore(dir, { now: () => NOW + 1 })
+    expect(next.ok && next.store.targets()).toEqual([])
+    expect(next.ok && next.previousStateMovedAside).toBe(
+      `${WAKE_BROKER_STATE_FILENAME}.corrupt-${NOW}`
+    )
+  })
+
+  it('carries no moved-aside note for a fresh host (IN-04 control)', () => {
+    const loaded = loadWakeBrokerStore(dir, { now: () => NOW })
+    expect(loaded.ok).toBe(true)
+    expect(loaded.ok && loaded.previousStateMovedAside).toBeUndefined()
   })
 
   it('reports an I/O read failure as io_failed and leaves the path in place', () => {

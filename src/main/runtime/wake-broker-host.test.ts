@@ -13,6 +13,7 @@ import {
 } from './wake-broker'
 import {
   dropWakeGrantsAfterRevoke,
+  formatWakeBrokerServeLine,
   startWakeBroker,
   wakeBrokerHost,
   wakeBrokerRuntimeCapabilities
@@ -155,6 +156,41 @@ describe('startWakeBroker', () => {
     )
     expect(preserved).toHaveLength(1)
     expect(readFileSync(join(dir, preserved[0]), 'utf8')).toBe(corrupt)
+  })
+
+  it('names a moved-aside state in the serve line on the start after quarantine (IN-04)', () => {
+    writeFileSync(join(dir, WAKE_BROKER_STATE_FILENAME), '{"schema":1,"targets":[')
+    const first = startWakeBroker(dir, { sendMagicPacket: recordSend })
+    expect(formatWakeBrokerServeLine(first)).toBe(
+      '[serve] wake broker: unavailable (wake_broker_state_unreadable)'
+    )
+    const movedAside = readdirSync(dir).find((name) => name.includes('.corrupt-'))
+    const second = startWakeBroker(dir, { sendMagicPacket: recordSend })
+    expect(second).toEqual({
+      state: 'enabled',
+      targetCount: 0,
+      previousStateMovedAside: movedAside
+    })
+    expect(formatWakeBrokerServeLine(second)).toBe(
+      `[serve] wake broker: enabled (0 targets, previous state moved aside to ${movedAside})`
+    )
+  })
+
+  it('stays unavailable on a newer schema and keeps the file in place (IN-04)', () => {
+    const bytes = JSON.stringify({ schema: 2, targets: [], grants: [] })
+    writeFileSync(join(dir, WAKE_BROKER_STATE_FILENAME), bytes)
+    const started = startWakeBroker(dir, { sendMagicPacket: recordSend })
+    expect(formatWakeBrokerServeLine(started)).toBe(
+      '[serve] wake broker: unavailable (wake_broker_state_newer_schema)'
+    )
+    expect(wakeBrokerHost.current()).toBeNull()
+    expect(readFileSync(join(dir, WAKE_BROKER_STATE_FILENAME), 'utf8')).toBe(bytes)
+  })
+
+  it('formats a plain enabled line when nothing was moved aside (IN-04 control)', () => {
+    expect(formatWakeBrokerServeLine({ state: 'enabled', targetCount: 1 })).toBe(
+      '[serve] wake broker: enabled (1 targets)'
+    )
   })
 
   it('prunes grants of devices that no longer exist when an authority is attached at start', () => {
