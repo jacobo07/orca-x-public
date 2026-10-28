@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { HostCardWakeAttempt } from '../components/host-availability-presentation'
+import { namesDeviceRevocation } from './device-revocation-refusal'
 import type { HomeHostStatusSnapshot } from './home-host-status-fetch'
 import {
   advertisesWakeBroker,
@@ -6,16 +9,30 @@ import {
   fetchHomeHostWakeTargets,
   hostKeyOfPublicKey,
   hostsAskableForWakeTargets,
+  isWakeAttemptTerminal,
   planHostWakePress,
   pressHostWake,
+  readHostWakeStatus,
   requestHostWake,
   shouldFetchWakeTargets,
+  wakesToRefresh,
   type HomeHostWakeTargetsSnapshot
 } from './home-host-wake-session'
-import type { RpcClient } from './rpc-client'
-import type { ConnectionState, HostProfile, RpcResponse } from './types'
+import { connect, type RpcClient } from './rpc-client'
+import type { ConnectionLogEntry, ConnectionState, HostProfile, RpcResponse } from './types'
 
 vi.mock('expo-crypto', () => ({ randomUUID: () => globalThis.crypto.randomUUID() }))
+
+// Why: the real RpcClient rows need a readable wire; the session module never touches e2ee.
+vi.mock('./e2ee', () => ({
+  generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
+  deriveSharedKey: () => new Uint8Array(32),
+  publicKeyFromBase64: () => new Uint8Array(32),
+  publicKeyToBase64: () => 'client-public-key',
+  encrypt: (plaintext: string) => `encrypted:${plaintext}`,
+  decrypt: (raw: string) => raw.replace(/^encrypted:/, ''),
+  decryptBytes: (bytes: Uint8Array) => bytes
+}))
 
 // 21-02 pinned vector: the 32 bytes 0x00..0x1f and the host's own fingerprint of them.
 const VECTOR_PUBLIC_KEY = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
@@ -364,5 +381,328 @@ describe('a press on a bound card', () => {
     expect(broker.calls).toHaveLength(1)
     expect(broker.calls[0]?.params).toMatchObject({ targetId: TARGET_ID })
     expect(attempt).toMatchObject({ brokerHostId: 'host-a', targetId: TARGET_ID, wakeId: 'wake-1' })
+  })
+})
+
+const FAILED_STAGES = [
+  { stage: 'requested', observedAt: 90, observer: 'broker' },
+  { stage: 'authorized', observedAt: 91, observer: 'broker' },
+  { stage: 'packet-send-failed', observedAt: 92, observer: 'broker', code: 'EHOSTUNREACH' }
+]
+
+function wakeAttempt(overrides: Partial<HostCardWakeAttempt> = {}): HostCardWakeAttempt {
+  return {
+    brokerHostId: 'host-a',
+    targetId: TARGET_ID,
+    requestId: 'req-00000001',
+    pressedAt: 5_000,
+    repliedAt: 5_001,
+    wakeId: 'wake-1',
+    brokerStages: PRESS_STAGES,
+    refusalCode: null,
+    ...overrides
+  }
+}
+
+describe('wake progress without a timer', () => {
+  it('re-reads host.wake.status on the broker client and replaces the broker stages', async () => {
+    const broker = fakeSession()
+    const before = wakeAttempt({ brokerStages: PRESS_STAGES.slice(0, 2) })
+
+    const done = readHostWakeStatus({ client: broker.client, attempt: before })
+    broker.settle(okResponse({ wakeId: 'wake-1', targetId: TARGET_ID, stages: PRESS_STAGES }))
+    const after = await done
+
+    expect(broker.calls).toEqual([{ method: 'host.wake.status', params: { wakeId: 'wake-1' } }])
+    expect(after).toEqual({ ...before, brokerStages: PRESS_STAGES })
+  })
+
+  it('records wake_unknown as the refusal and the attempt ends', async () => {
+    const broker = fakeSession()
+
+    const done = readHostWakeStatus({ client: broker.client, attempt: wakeAttempt() })
+    broker.settle(failResponse('wake_unknown'))
+    const after = await done
+
+    expect(after.refusalCode).toBe('wake_unknown')
+    expect(isWakeAttemptTerminal(after)).toBe(true)
+  })
+
+  it('keeps the attempt by identity when the read never answers', async () => {
+    const broker = fakeSession()
+    const before = wakeAttempt()
+
+    const done = readHostWakeStatus({ client: broker.client, attempt: before })
+    broker.settle(new Error('socket closed mid-request'))
+
+    expect(await done).toBe(before)
+  })
+
+  it('does not ask without a wakeId', async () => {
+    const broker = fakeSession()
+    const before = wakeAttempt({ wakeId: null })
+
+    expect(await readHostWakeStatus({ client: broker.client, attempt: before })).toBe(before)
+    expect(broker.calls).toEqual([])
+  })
+
+  it('ends on a refusal or a failed send, never on a sent packet', () => {
+    expect(isWakeAttemptTerminal(wakeAttempt())).toBe(false)
+    expect(isWakeAttemptTerminal(wakeAttempt({ brokerStages: 'unreadable' }))).toBe(false)
+    expect(isWakeAttemptTerminal(wakeAttempt({ brokerStages: FAILED_STAGES }))).toBe(true)
+    const refused = wakeAttempt({ refusalCode: 'wake_grant_missing', brokerStages: null })
+    expect(isWakeAttemptTerminal(refused)).toBe(true)
+  })
+
+  it('selects for the focus re-read only answered, unfinished wakes with a wakeId', () => {
+    const attempts = {
+      sent: wakeAttempt(),
+      refused: wakeAttempt({ refusalCode: 'wake_send_failed' }),
+      failed: wakeAttempt({ brokerStages: FAILED_STAGES }),
+      pending: wakeAttempt({ repliedAt: null, wakeId: null, brokerStages: null }),
+      unnamed: wakeAttempt({ wakeId: null })
+    }
+
+    expect(wakesToRefresh(attempts)).toEqual([{ targetHostId: 'sent', attempt: attempts.sent }])
+  })
+})
+
+const SESSION_SOURCE = readFileSync(new URL('./home-host-wake-session.ts', import.meta.url), 'utf8')
+const HOOK_SOURCE = readFileSync(
+  new URL('../components/use-host-card-wake.ts', import.meta.url),
+  'utf8'
+)
+const FORBIDDEN_SESSION_TOKENS = [
+  'device-revocation-refusal',
+  'namesDeviceRevocation',
+  'handleAuthRejection',
+  'setInterval',
+  'setTimeout',
+  'AsyncStorage',
+  'async-storage',
+  'SecureStore',
+  'secure-store',
+  'saveHomeSnapshot'
+]
+
+describe('a wake refusal stays a wake state', () => {
+  it('records wake_device_revoked as the refusal; the latch predicate reads false', async () => {
+    const broker = fakeSession()
+    const refusal = failResponse('wake_device_revoked', { wakeId: 'wake-1', stages: FAILED_STAGES })
+
+    const done = requestHostWake({
+      client: broker.client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    broker.settle(refusal)
+    const attempt = await done
+
+    expect(attempt).toMatchObject({ repliedAt: 5_001, refusalCode: 'wake_device_revoked' })
+    expect(isWakeAttemptTerminal(attempt)).toBe(true)
+    expect(refusal.ok).toBe(false)
+    expect(namesDeviceRevocation(refusal.ok ? null : refusal.error)).toBe(false)
+  })
+
+  it('records a refusal without a string code as unknown', async () => {
+    const broker = fakeSession()
+    const done = requestHostWake({
+      client: broker.client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    broker.settle(failResponse(''))
+
+    expect((await done).refusalCode).toBe('unknown')
+  })
+
+  it('the session module and hook never import the latch, never time, never persist', () => {
+    for (const source of [SESSION_SOURCE, HOOK_SOURCE]) {
+      for (const token of FORBIDDEN_SESSION_TOKENS) {
+        expect(source).not.toContain(token)
+      }
+    }
+    // Why: a reader that read nothing would pass the absence rows above.
+    expect(SESSION_SOURCE).toContain("'host.wake.request'")
+    expect(HOOK_SOURCE).toContain('export function useHostCardWake')
+  })
+})
+
+class MockWebSocket {
+  static CONNECTING = 0
+  static OPEN = 1
+  static CLOSING = 2
+  static CLOSED = 3
+
+  readonly CONNECTING = MockWebSocket.CONNECTING
+  readonly OPEN = MockWebSocket.OPEN
+  readonly CLOSING = MockWebSocket.CLOSING
+  readonly CLOSED = MockWebSocket.CLOSED
+
+  readyState = MockWebSocket.CONNECTING
+  onopen: (() => void) | null = null
+  onclose: ((event?: { code?: number; reason?: string; wasClean?: boolean }) => void) | null = null
+  onmessage: ((event: { data: unknown }) => void) | null = null
+  onerror: (() => void) | null = null
+  sent: string[] = []
+  close = vi.fn(() => {
+    if (this.readyState === MockWebSocket.CLOSED) {
+      return
+    }
+    this.readyState = MockWebSocket.CLOSED
+    void Promise.resolve().then(() => this.onclose?.())
+  })
+
+  constructor(readonly endpoint: string) {
+    mockSockets.push(this)
+  }
+
+  send(payload: string): void {
+    this.sent.push(payload)
+  }
+
+  open(): void {
+    this.readyState = MockWebSocket.OPEN
+    this.onopen?.()
+  }
+
+  receive(payload: unknown): void {
+    this.onmessage?.({ data: payload })
+  }
+}
+
+const mockSockets: MockWebSocket[] = []
+const originalWebSocket = globalThis.WebSocket
+
+type WireRequest = { id: string; method: string; params?: unknown }
+
+function readWireRequest(raw: string): WireRequest | null {
+  try {
+    const parsed: unknown = JSON.parse(raw.replace(/^encrypted:/, ''))
+    return typeof parsed === 'object' && parsed !== null && 'method' in parsed
+      ? (parsed as WireRequest)
+      : null
+  } catch {
+    return null
+  }
+}
+
+// Why poll microtasks: the client writes a request after its connect wait resolves.
+async function wireRequest(socket: MockWebSocket, method: string): Promise<WireRequest> {
+  for (let tick = 0; tick < 50; tick += 1) {
+    const found = socket.sent.map(readWireRequest).find((request) => request?.method === method)
+    if (found) {
+      return found
+    }
+    await Promise.resolve()
+  }
+  throw new Error(`no ${method} request reached the socket`)
+}
+
+function connectedRealClient() {
+  const log: ConnectionLogEntry[] = []
+  const states: ConnectionState[] = []
+  const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+    onLog: (entry) => log.push(entry),
+    onStateChange: (state) => states.push(state)
+  })
+  const socket = mockSockets[0]!
+  socket.open()
+  socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+  socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+  return { client, socket, log, states }
+}
+
+function refuseOnWire(socket: MockWebSocket, id: string, error: Record<string, unknown>): void {
+  socket.receive(
+    `encrypted:${JSON.stringify({ id, ok: false, error, _meta: { runtimeId: 'rt' } })}`
+  )
+}
+
+describe('a wake refusal through a real RpcClient', () => {
+  let authRejections: () => number = () => 0
+
+  afterEach(() => {
+    globalThis.WebSocket = originalWebSocket
+    vi.restoreAllMocks()
+  })
+
+  function arm(): void {
+    vi.useFakeTimers()
+    mockSockets.length = 0
+    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    // Why console: every handleAuthRejection branch logs '[net] auth rejected'; it is the closure's only seam.
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    authRejections = () =>
+      log.mock.calls.filter((call) => String(call[0]).startsWith('[net] auth rejected')).length
+  }
+
+  it('never reaches handleAuthRejection and leaves the pairing connected', async () => {
+    arm()
+    const { client, socket, log, states } = connectedRealClient()
+    expect(client.getState()).toBe('connected')
+
+    const done = requestHostWake({
+      client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    const request = await wireRequest(socket, 'host.wake.request')
+    refuseOnWire(socket, request.id, {
+      code: 'wake_device_revoked',
+      message: 'This device is revoked for wake.',
+      data: { wakeId: 'wake-1', stages: FAILED_STAGES }
+    })
+    const attempt = await done
+
+    expect(attempt.refusalCode).toBe('wake_device_revoked')
+    expect(authRejections()).toBe(0)
+    expect(log.map((entry) => entry.message)).not.toContain('Authentication rejected')
+    expect(states).not.toContain('reconnecting')
+    expect(states).not.toContain('auth-failed')
+    expect(client.getState()).toBe('connected')
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(mockSockets).toHaveLength(1)
+    // Why: the same pairing still carries and answers the next request.
+    const next = client.sendRequest('status.get')
+    const nextRequest = await wireRequest(socket, 'status.get')
+    socket.receive(
+      `encrypted:${JSON.stringify({ id: nextRequest.id, ok: true, result: {}, _meta: { runtimeId: 'rt' } })}`
+    )
+    expect((await next).ok).toBe(true)
+
+    client.close()
+  })
+
+  it('control: an unauthorized device_revoked reply on the same path does reach it', async () => {
+    arm()
+    const { client, socket } = connectedRealClient()
+
+    const done = requestHostWake({
+      client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    const request = await wireRequest(socket, 'host.wake.request')
+    refuseOnWire(socket, request.id, {
+      code: 'unauthorized',
+      message: 'Device access revoked',
+      data: { reason: 'device_revoked' }
+    })
+    const attempt = await done
+
+    expect(authRejections()).toBeGreaterThan(0)
+    expect(client.getState()).toBe('auth-failed')
+    expect(attempt.refusalCode).toBe('unknown')
+
+    client.close()
   })
 })
