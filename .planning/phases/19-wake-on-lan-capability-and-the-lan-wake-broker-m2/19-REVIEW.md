@@ -179,6 +179,58 @@ Scope: Critical + Warning (no criticals). IN-01..IN-05 left open.
   - `typecheck:node`: exit 0.
   - `check:durability-contracts`: passed (22 contracts, no new publishers).
 
+## Deferred info fixes (2026-10-28)
+
+Scope: IN-01, IN-02, IN-04 and IN-05. IN-03 (bare-name `powershell.exe` / `powercfg.exe`) is left for a later batch. Each fix has a RED test commit before it, and every commit was made in C:\owx-haf with hooks on. No worktree was used, so verification ran in this checkout.
+
+### IN-01: FIXED
+
+- **RED** `3eedf4c14`. Changed `wake-broker.test.ts` › "refuses a device revoked between authorization and the send, sending nothing" to expect `['requested','authorized','packet-send-failed']` with `code: 'wake_device_revoked'`. Added "ends a wake refused at the effect re-judge for every other granted device (IN-01)": B's `host.wake.status` sees the terminal stage, and B's retry with the same requestId is a fresh wake that is neither replayed nor adopted. "records packet-send-failed … wake_send_failed" now expects `data.stages`. 3 failed before the fix.
+- **GREEN** `ef1d87e3b`. A re-judge refusal now records `packet-send-failed` with the refusal code before it throws, and `wake_send_failed` carries `stages`. A new `refused` stage was not used, because clients filter broker stages through an allowlist (`composeWakeProgress`): an old client would drop the unknown stage and keep showing "sending". There is no wire change, only an additive data field.
+
+### IN-02: FIXED
+
+- **RED** `2669d0c93`. `wake.test.ts` › "refuses a %s caller without claiming an SSH session it cannot prove (IN-02)" runs three cases: WSL `\\wsl.localhost\…`, WSL under `/mnt/c` (`C:\…`), and SSH `/home/…`. 3 failed before the fix.
+- **GREEN** `888ab9b94`. The refusal is unchanged: same code, same trigger, fails closed. The message now reads "must run in a native shell on the Orca host itself, not through a remote or bridged shell (SSH relay or WSL)". The two callers were not given separate messages because they cannot be told apart reliably. The bridge forwards `wslpath -w`, which is a plain `C:\…` path under `/mnt/c`, and an SSH relay into a Windows host forwards the same shape.
+- **Follow-up** `9faaa8015` (test only). The RED test destructured from a `void | Error`, which failed `typecheck:cli` (TS2339). The caught value is now cast, and the assertions are unchanged.
+
+### IN-04: FIXED
+
+- **RED** `8a20140ec`.
+  - `wake-broker-store.test.ts` › "refuses a newer schema and leaves the file untouched, never moved aside (IN-04)". The bytes are identical afterwards, there is no `.corrupt-` sibling, and 0 publishes happen.
+  - "reports a previously moved-aside state on the next start instead of a silent empty store (IN-04)", with the control "carries no moved-aside note for a fresh host".
+  - The corrupt `it.each` cases are now schema `0` and `'1'`; the schema-2 case moved out of the corrupt set.
+  - `wake-broker-host.test.ts` › "names a moved-aside state in the serve line on the start after quarantine (IN-04)", "stays unavailable on a newer schema and keeps the file in place (IN-04)", and the control "formats a plain enabled line when nothing was moved aside".
+  - 5 failed before the fix.
+- **GREEN** `6becb3686`.
+  - Newer schema: an integer `schema` greater than 1 now loads as `wake_broker_state_newer_schema`. The broker stays unavailable, and the file is neither renamed nor published over.
+  - Moved-aside report: when the state file is absent and a `.corrupt-<ms>` sibling exists, the load carries `previousStateMovedAside`. The serve line, built by `formatWakeBrokerServeLine` (index.ts now calls it), reads `enabled (0 targets, previous state moved aside to <name>)`.
+  - Failing to list userData returns `wake_broker_state_io_failed`.
+  - The `onFailure` text of the `runtime.wake-broker-state` contract was updated.
+
+### IN-05: FIXED
+
+- **RED** `ca36cd583`. `wake-broker-store.test.ts` › "a publish that throws after its rename (IN-05)" has three tests:
+  - "reports an on-disk grant as indeterminate and active, never as a definite failure"
+  - "reconciles a target addition the same way"
+  - "reports indeterminate and inactive when disk holds neither the old nor the new state"
+
+  The control is the existing "publishes an addition before the memory swap": a throw before any write still surfaces the original error. 3 failed before the fix.
+- **GREEN** `29acbe041`. When a publish throws, `commitAddition` re-reads the file and acts on what it finds:
+  - **Disk holds the previous state** (ENOENT counts as empty): the storage error is rethrown, as before.
+  - **Disk holds the new state:** memory adopts it, and the call refuses with the new `wake_broker_state_indeterminate`, `data: { active: true, cause }`.
+  - **Anything else:** the same code with `active: false`, and memory is unchanged.
+
+  This is the smallest option that is true in every branch. Reporting only `unknown` would let `grant list` disagree with what the next restart loads. Reporting success would hide a failed directory fsync. The code is added to `HOST_WAKE_REFUSAL_CODES`, which is spread into `STRUCTURED_RUNTIME_PASSTHROUGH_CODES`. The schema validation moved unchanged into `wake-broker-state-schema.ts` to keep the store under the 300-line lint cap, with no max-lines disable.
+
+### Verification (C:\owx-haf checkout, no worktree)
+
+- **vitest, 10 files** (`wake-broker`, `wake-broker-store`, `wake-broker-host`, `host-wake-admin`, `host-wake`, `wake-broker-revoke-in-process`, `wake-broker-relay-dispatch`, `cli/handlers/wake`, `cli/runtime/serve-autostart`, `cli/handlers/serve-autostart`): `Tests 1 failed | 169 passed (170)`. The one failure was in `wake-broker-relay-dispatch.test.ts`: `expected false to be true`, a 65 s file run under 10-file parallel load.
+- **Relay-dispatch file re-runs:** alone, `Tests 9 passed (9)`. It also passed in a 6-file run on identical code (`Tests 110 passed (110)`). Its revoke test refuses at the first `judge`, before `sendWake`, so the IN-01 stage change does not reach it.
+- **Status:** load-sensitive under parallel runs, not shown pre-existing.
+- `typecheck:node` exit 0. `typecheck:cli` exit 0.
+- `check:durability-contracts`: passed, 22 contracts, no new publishers. `check:host-card-claims` exit 0. `check:recurring-work`: OK, debt=0.
+
 ## REVIEW COMPLETE
 
 critical: 0 · warning: 1 · info: 5 · total: 6
