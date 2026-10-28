@@ -59,10 +59,27 @@ describe('host availability wiring', () => {
   })
 
   // Why: the first adapter read must start at host start, not on the first phone request (D-03).
-  function primedAfter(registration: string): string {
+  function primedAfter(registration: string, lines = 6): string {
     const end = source.indexOf(registration) + registration.length
-    return source.slice(end).split('\n').slice(0, 6).join('\n')
+    return source.slice(end).split('\n').slice(0, lines).join('\n')
   }
+
+  it('creates one OOB probe and passes it to both registrations, primed after each', () => {
+    expect(countOccurrences(source, 'createHostOobProbe(')).toBe(1)
+    expect(source).toContain('const hostOobProbe = createHostOobProbe(defaultHostOobProbeDeps())')
+    for (const anchor of [
+      'const serveHostRelay = hostRelayOwner.start(',
+      'const hostRelay = hostRelayOwner.start('
+    ]) {
+      const registration = registrationAfter(anchor)
+      expect(registration, anchor).toContain('oob: hostOobProbe')
+      expect(primedAfter(registration, 8), anchor).toContain('hostOobProbe.read()')
+    }
+  })
+
+  it('never instantiates the OOB power contract in production (D-06)', () => {
+    expect(source).not.toContain('oob-power')
+  })
 
   it('creates one WOL probe and passes it to both registrations, primed after each', () => {
     expect(countOccurrences(source, 'createHostWolProbe(')).toBe(1)
