@@ -12,6 +12,8 @@ const ADAPTERS_JSON =
   '[{"Name":"Ethernet","InterfaceDescription":"Realtek PCIe GbE Family Controller","MediaType":"802.3","WakeOnMagicPacket":"Enabled"}]'
 const ARMED_WITHOUT_NIC = 'HID Keyboard Device\r\nHID-compliant mouse\r\n'
 const SYSFS_ENP3S0 = '/sys/class/net/enp3s0/device/power/wakeup'
+const POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const POWERCFG = 'C:\\Windows\\System32\\powercfg.exe'
 
 type Call = { file: string; args: readonly string[] }
 type Replies = Record<string, HostWolExecResult>
@@ -39,7 +41,9 @@ function harness(
     readText: (path) => {
       reads.push(path)
       return Promise.resolve(linux.files?.[path] ?? null)
-    }
+    },
+    windowsPowerShellPath: POWERSHELL,
+    windowsPowercfgPath: POWERCFG
   })
   return {
     probe,
@@ -53,12 +57,12 @@ function harness(
 }
 
 const WIN_REPLIES: Replies = {
-  'powershell.exe': ok(ADAPTERS_JSON),
-  'powercfg.exe': ok(ARMED_WITHOUT_NIC)
+  [POWERSHELL]: ok(ADAPTERS_JSON),
+  [POWERCFG]: ok(ARMED_WITHOUT_NIC)
 }
 
 function adapterReads(calls: Call[]): number {
-  return calls.filter((call) => call.file === 'powershell.exe').length
+  return calls.filter((call) => call.file === POWERSHELL).length
 }
 
 describe('host WOL probe bounds (D-03)', () => {
@@ -190,13 +194,21 @@ describe('default WOL probe deps', () => {
     await expect(deps.readText('/nonexistent/orca-wol-probe/wakeup')).resolves.toBeNull()
     await expect(deps.listPhysicalInterfaces()).resolves.toEqual(expect.any(Array))
   })
+
+  it('spawns PowerShell and powercfg from System32 by absolute path, never by bare name (IN-03)', () => {
+    const deps = defaultHostWolProbeDeps()
+    expect(deps.windowsPowerShellPath).toMatch(
+      /^[A-Za-z]:\\.*\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/
+    )
+    expect(deps.windowsPowercfgPath).toMatch(/^[A-Za-z]:\\.*\\System32\\powercfg\.exe$/)
+  })
 })
 
 describe('host WOL probe on win32', () => {
   it('answers pending, then maps an enabled but unarmed Ethernet adapter to os_not_armed', async () => {
     const h = harness('win32', {
-      'powershell.exe': ok(ADAPTERS_JSON),
-      'powercfg.exe': ok(ARMED_WITHOUT_NIC)
+      [POWERSHELL]: ok(ADAPTERS_JSON),
+      [POWERCFG]: ok(ARMED_WITHOUT_NIC)
     })
     expect(h.probe.read()).toEqual({
       value: 'unknown',
@@ -214,22 +226,22 @@ describe('host WOL probe on win32', () => {
 
   it('spawns exactly the constant adapter script and the read-only powercfg query', async () => {
     const h = harness('win32', {
-      'powershell.exe': ok(ADAPTERS_JSON),
-      'powercfg.exe': ok(ARMED_WITHOUT_NIC)
+      [POWERSHELL]: ok(ADAPTERS_JSON),
+      [POWERCFG]: ok(ARMED_WITHOUT_NIC)
     })
     h.probe.read()
     await h.probe.settled()
     expect(h.calls).toEqual([
       {
-        file: 'powershell.exe',
+        file: POWERSHELL,
         args: ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_WOL_ADAPTER_SCRIPT]
       },
-      { file: 'powercfg.exe', args: ['/devicequery', 'wake_armed'] }
+      { file: POWERCFG, args: ['/devicequery', 'wake_armed'] }
     ])
   })
 
   it('reads a failed adapter spawn as wol_probe_unreadable, never not-supported', async () => {
-    const h = harness('win32', { 'powercfg.exe': ok(ARMED_WITHOUT_NIC) })
+    const h = harness('win32', { [POWERCFG]: ok(ARMED_WITHOUT_NIC) })
     h.probe.read()
     await h.probe.settled()
     expect(h.probe.read()).toEqual({

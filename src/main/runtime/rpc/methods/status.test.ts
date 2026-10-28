@@ -31,7 +31,7 @@ const wolProbe = createHostWolProbe({
   now: () => T,
   exec: (file) =>
     Promise.resolve(
-      file === 'powershell.exe'
+      file === 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
         ? {
             code: 0,
             stdout:
@@ -41,7 +41,9 @@ const wolProbe = createHostWolProbe({
         : { code: 0, stdout: 'HID Keyboard Device\r\nHID-compliant mouse\r\n', stderr: '' }
     ),
   listPhysicalInterfaces: () => Promise.resolve([]),
-  readText: () => Promise.resolve(null)
+  readText: () => Promise.resolve(null),
+  windowsPowerShellPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  windowsPowercfgPath: 'C:\\Windows\\System32\\powercfg.exe'
 })
 
 function fakeRuntime(): OrcaRuntimeService {

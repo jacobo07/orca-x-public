@@ -76,7 +76,7 @@ describe('host autostart probe on win32', () => {
       evidence: null
     })
     expect(calls).toHaveLength(1)
-    expect(calls[0].file).toBe('powershell.exe')
+    expect(calls[0].file).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
     expect(calls[0].args).toEqual([
       '-NoProfile',
       '-NonInteractive',

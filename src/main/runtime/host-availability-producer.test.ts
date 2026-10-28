@@ -179,13 +179,15 @@ describe('createHostAvailabilityProducer', () => {
         Promise.resolve({
           code: 0,
           stdout:
-            file === 'powershell.exe'
+            file === 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
               ? `[{"Name":"Ethernet 7","InterfaceDescription":"${NIC_DESCRIPTION}","MediaType":"802.3","WakeOnMagicPacket":"Enabled"}]`
               : `${NIC_DESCRIPTION}\r\n`,
           stderr: ''
         }),
       listPhysicalInterfaces: () => Promise.resolve([]),
-      readText: () => Promise.resolve(null)
+      readText: () => Promise.resolve(null),
+      windowsPowerShellPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      windowsPowercfgPath: 'C:\\Windows\\System32\\powercfg.exe'
     })
     probe.read()
     await probe.settled()
