@@ -12,6 +12,7 @@ import {
   stringLiterals
 } from './check-workspace-surface-claims.mjs'
 import { evaluateCapabilityProducers } from './host-capability-producer-gate.mjs'
+import { checkEffectWordingScope } from './host-card-effect-claims.mjs'
 
 /**
  * The phone's host card says only what a producer can prove (D-10).
@@ -27,6 +28,8 @@ import { evaluateCapabilityProducers } from './host-capability-producer-gate.mjs
  *   G3 evidence   kinds from HOST_EVIDENCE_KINDS; unknown carries none, a claim carries some
  *   G4 power-loss power-loss copy only on an evidenced power-loss key, never outside the table
  *   G5 controls   literal testID, classified, navigation without effect words, effect with an RPC
+ *   G5 scope      effect wording only inside the backed effect control enclosing it, never nested
+ *                 (host-card-effect-claims.mjs)
  *   G6 producers  every capability id classified; supported only with evidence its producer quotes
  *                 (host-capability-producer-gate.mjs)
  *
@@ -474,16 +477,17 @@ export function evaluateHostCardClaims({ config, files, read, rpcMethods, vocab 
       )
     }
   }
-  const effectBacked = Object.values(config.actions ?? {}).some(
-    (action) => action?.kind === 'effect' && rpcMethods.has(action.rpc)
-  )
-  if (!effectBacked) {
-    for (const item of cardCopy.filter((entry) => EFFECT_VERB.test(entry.text))) {
-      failures.push(
-        `${card}:${item.line} effect wording "${item.text}" but no effect control classified to a host RPC method`
-      )
-    }
-  }
+  checkEffectWordingScope({
+    card,
+    cardSource: strippedCard,
+    cardCopy,
+    actions: config.actions ?? {},
+    rpcMethods,
+    effectVerb: EFFECT_VERB,
+    literalTestID,
+    controlTags: CONTROL_TAGS,
+    failures
+  })
   if (rpcMethods.size < MIN_RPC_METHODS) {
     failures.push(
       `found ${rpcMethods.size} host RPC method names, expected at least ${MIN_RPC_METHODS}; the sweep may have stopped seeing ${config.rpcMethodsDir}`
