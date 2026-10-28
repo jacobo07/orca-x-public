@@ -213,7 +213,7 @@ describe('G6 rule table', () => {
   it('R5: fails evidence the region never quotes, passes the kind it does quote', () => {
     const red = withProducer('can-relay', supportedBody('relay-reported'), allowance(['os-probe']))
     expect(evaluate(red).failures).toEqual([
-      'capability can-relay: supported evidence "os-probe" is never quoted in host/can-relay.ts#produce'
+      'capability can-relay: a supported value in host/can-relay.ts#produce has no "os-probe" evidence beside it'
     ])
     const green = withProducer(
       'can-relay',
@@ -320,7 +320,7 @@ describe('G6 R7 emitters', () => {
     )
     red.files['host/can-start-orca.ts'] = producerFile('produce', producer)
     expect(evaluate(red).failures).toEqual([
-      'capability can-start-orca: supported evidence "os-probe" is never quoted in emitter host/probe.ts'
+      'capability can-start-orca: a supported value in emitter host/probe.ts has no "os-probe" evidence beside it'
     ])
   })
 
@@ -337,5 +337,96 @@ describe('G6 R7 emitters', () => {
       producerCount: 6,
       emitterCount: 0
     })
+  })
+})
+
+const EMITS_UNBACKED = (label) =>
+  `capability can-power-on-oob: ${label} emits supported without an evidence producer`
+
+describe('G6 IN-01 comment, literal and beside hardening', () => {
+  it('strips a trailing // comment, so neither a literal nor evidence can hide in one', () => {
+    const trailingLiteral = `${UNKNOWN_BODY} // value: 'supported'`
+    expect(evaluate(withProducer('can-power-on-oob', trailingLiteral))).toEqual(PASS)
+    const trailingEvidence =
+      "  return { value: 'supported', reason: 'seen', evidence: null } // 'relay-reported'"
+    expect(
+      evaluate(withProducer('can-relay', trailingEvidence, allowance(['relay-reported']))).failures
+    ).toEqual([
+      'capability can-relay: a supported value in host/can-relay.ts#produce has no "relay-reported" evidence beside it'
+    ])
+  })
+
+  it('does not treat /* inside a string as a comment that hides later code', () => {
+    const body = [
+      "  const glob = 'src/*.ts'",
+      "  return { value: 'supported', reason: glob, evidence: null }",
+      "  const close = '*/'"
+    ].join('\n')
+    expect(evaluate(withProducer('can-power-on-oob', body)).failures).toEqual([
+      EMITS_UNBACKED('host/can-power-on-oob.ts#produce')
+    ])
+  })
+
+  it('keeps code after a regex literal that contains //', () => {
+    const body =
+      "  if (/^\\/\\//.test(nowMs)) return { value: 'supported', reason: 'seen', evidence: null }"
+    expect(evaluate(withProducer('can-power-on-oob', `${body}\n${UNKNOWN_BODY}`)).failures).toEqual(
+      [EMITS_UNBACKED('host/can-power-on-oob.ts#produce')]
+    )
+  })
+
+  it.each([
+    ['a template literal', supportedBody('os-probe', '`')],
+    ['a quoted key', "  return { 'value': 'supported', reason: 'seen', evidence: null }"],
+    [
+      'shorthand from a local',
+      "  const value = 'supported'\n  return { value, reason: 'seen', evidence: null }"
+    ]
+  ])('detects supported written as %s', (_, body) => {
+    expect(evaluate(withProducer('can-power-on-oob', body)).failures).toEqual([
+      EMITS_UNBACKED('host/can-power-on-oob.ts#produce')
+    ])
+  })
+
+  it('detects a module constant that flows into value:', () => {
+    const red = baseFixture()
+    red.files['host/can-power-on-oob.ts'] = [
+      "const SUPPORTED = 'supported' as const",
+      producerFile('produce', "  return { value: SUPPORTED, reason: 'seen', evidence: null }")
+    ].join('\n')
+    expect(evaluate(red).failures).toEqual([EMITS_UNBACKED('host/can-power-on-oob.ts#produce')])
+    const green = baseFixture()
+    green.files['host/can-power-on-oob.ts'] = [
+      "const SUPPORTED = 'supported' as const",
+      producerFile('produce')
+    ].join('\n')
+    expect(evaluate(green)).toEqual(PASS)
+  })
+
+  it('fails evidence: null beside supported even when the kind is quoted elsewhere in the region', () => {
+    const body = [
+      "  const proof = { kind: 'os-probe', observedAt: nowMs }",
+      "  if (nowMs > 0) return { value: 'not-configured', reason: 'off', evidence: proof }",
+      "  return { value: 'supported', reason: 'seen', evidence: null }"
+    ].join('\n')
+    expect(
+      evaluate(withProducer('can-start-orca', body, allowance(['os-probe']))).failures
+    ).toEqual([
+      'capability can-start-orca: a supported value in host/can-start-orca.ts#produce has no "os-probe" evidence beside it'
+    ])
+  })
+
+  it.each([
+    [
+      'shorthand',
+      "  const evidence = { kind: 'os-probe', observedAt: nowMs } as const\n  return { value: 'supported', reason: 'seen', evidence }"
+    ],
+    [
+      'a named const',
+      "  const proof = { kind: 'os-probe', observedAt: nowMs }\n  return { value: 'supported', reason: 'seen', evidence: proof }"
+    ],
+    ['an inline object', supportedBody('os-probe')]
+  ])('passes evidence beside supported through %s', (_, body) => {
+    expect(evaluate(withProducer('can-start-orca', body, allowance(['os-probe'])))).toEqual(PASS)
   })
 })
