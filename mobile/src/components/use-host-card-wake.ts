@@ -9,7 +9,8 @@ import {
   readHostWakeStatus,
   wakesToRefresh,
   type HomeHostWakeTargetsSnapshot,
-  type HostWakeClientEntry
+  type HostWakeClientEntry,
+  type WakeTargetObservations
 } from '../transport/home-host-wake-session'
 import type { ConnectionState } from '../transport/types'
 import type { HostCardWakeAttempt, HostCardWakeInputs } from './host-availability-presentation'
@@ -36,6 +37,12 @@ export function useHostCardWake(input: {
   // Why a ref: the focus callback stays stable yet reads the latest attempts.
   const attemptsRef = useRef(attempts)
   attemptsRef.current = attempts
+  // Why a ref: the stable focus callback judges "target answered" on the latest card inputs.
+  const observationsRef = useRef<WakeTargetObservations>({
+    statuses: hostStatusSnapshots,
+    lastConnected: hostLastConnected
+  })
+  observationsRef.current = { statuses: hostStatusSnapshots, lastConnected: hostLastConnected }
   const askedAtRef = useRef(new Map<string, number>())
   const inFlightRef = useRef(new Set<string>())
   const unmountedRef = useRef(false)
@@ -117,7 +124,10 @@ export function useHostCardWake(input: {
   // Why no timer: progress is re-read on focus; the target's own reconnect supplies host-announced (D-07).
   const refreshWakes = useCallback(
     (disposed: () => boolean) => {
-      for (const { targetHostId, attempt } of wakesToRefresh(attemptsRef.current)) {
+      for (const { targetHostId, attempt } of wakesToRefresh(
+        attemptsRef.current,
+        observationsRef.current
+      )) {
         const broker = allClientsRef.current.find((entry) => entry.hostId === attempt.brokerHostId)
         if (!broker || broker.client.getState() !== 'connected') {
           continue

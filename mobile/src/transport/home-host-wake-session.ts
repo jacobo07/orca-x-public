@@ -8,6 +8,7 @@ import {
 } from '../../../src/shared/host-wake-proxy'
 import { HOST_WAKE_BROKER_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { HostCardWakeAttempt } from '../components/host-availability-presentation'
+import { isTargetObservedStage, wakeAttemptFurthestStage } from '../components/host-card-wake-stage'
 import type { HomeHostStatusSnapshot } from './home-host-status-fetch'
 import { sendSingleFlightRequest } from './request-single-flight'
 import type { RpcClient } from './rpc-client'
@@ -230,7 +231,8 @@ export async function readHostWakeStatus(input: {
     return attempt
   }
   if (!response.ok) {
-    return { ...attempt, refusalCode: refusalCodeOf(response.error) }
+    // Why not refusalCode: the press already has its outcome; this read only failed (WR-01).
+    return { ...attempt, statusReadCode: refusalCodeOf(response.error) }
   }
   const result = isRecord(response.result) ? response.result : {}
   return { ...attempt, brokerStages: result.stages }
@@ -245,20 +247,47 @@ function brokerStageNames(brokerStages: unknown): string[] {
   )
 }
 
-// Why: a refusal or a failed send is final; a sent packet still waits for the target's own answer.
+// Why: a refusal, a failed send or a closed status read is final; a sent packet waits for the target.
 export function isWakeAttemptTerminal(attempt: HostCardWakeAttempt): boolean {
   return (
     attempt.refusalCode !== null ||
+    attempt.statusReadCode !== undefined ||
     brokerStageNames(attempt.brokerStages).includes('packet-send-failed')
   )
 }
 
 export type HostWakeRefresh = { targetHostId: string; attempt: HostCardWakeAttempt }
 
-// Why: focus re-reads only a wake the broker named and that can still change.
-export function wakesToRefresh(attempts: Record<string, HostCardWakeAttempt>): HostWakeRefresh[] {
+// The card's own inputs per target host id, the same ones the presenter reads.
+export type WakeTargetObservations = {
+  statuses: Record<string, HomeHostStatusSnapshot>
+  lastConnected: Record<string, number | null>
+}
+
+function targetAnswered(
+  targetHostId: string,
+  attempt: HostCardWakeAttempt,
+  observations: WakeTargetObservations
+): boolean {
+  return isTargetObservedStage(
+    wakeAttemptFurthestStage(
+      attempt,
+      observations.statuses[targetHostId],
+      observations.lastConnected[targetHostId] ?? null
+    )
+  )
+}
+
+// Why: focus re-reads only a named wake that can still change and whose target has not answered.
+export function wakesToRefresh(
+  attempts: Record<string, HostCardWakeAttempt>,
+  observations: WakeTargetObservations
+): HostWakeRefresh[] {
   return Object.entries(attempts).flatMap(([targetHostId, attempt]) =>
-    attempt.repliedAt !== null && attempt.wakeId !== null && !isWakeAttemptTerminal(attempt)
+    attempt.repliedAt !== null &&
+    attempt.wakeId !== null &&
+    !isWakeAttemptTerminal(attempt) &&
+    !targetAnswered(targetHostId, attempt, observations)
       ? [{ targetHostId, attempt }]
       : []
   )

@@ -9,20 +9,12 @@ import {
   type HostPowerState,
   type HostStatusObservation
 } from '../../../src/shared/host-availability'
-import {
-  composeWakeProgress,
-  type HostWakeRefusalCode,
-  type HostWakeStageRecord
-} from '../../../src/shared/host-wake'
+import type { HostWakeRefusalCode, HostWakeStageRecord } from '../../../src/shared/host-wake'
 import { composeHostWakeRoute, type WakeRouteBroker } from '../../../src/shared/host-wake-proxy'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import { evaluateCompat } from '../transport/protocol-compat'
-import {
-  furthestWakeStage,
-  rebaseBrokerStages,
-  targetAnswerAfterPress
-} from './host-card-wake-stage'
+import { statusReadHidesStage, wakeAttemptFurthestStage } from './host-card-wake-stage'
 
 // The only availability copy the host card can show. A state without a key renders its family's
 // unknown label; a key is added only together with a producer that can prove the state.
@@ -203,6 +195,8 @@ export type HostCardWakeAttempt = {
   wakeId: string | null
   brokerStages: unknown
   refusalCode: string | null
+  // Why apart from refusalCode: a later status read failing says nothing about the press (WR-01).
+  statusReadCode?: string
 }
 
 export type HostCardWakeInputs = {
@@ -272,19 +266,16 @@ function attemptStageLabelId(
   snapshot: HomeHostStatusSnapshot | undefined,
   lastConnectedAt: number | null
 ): HostCardLabelId | null {
-  const { repliedAt } = attempt
-  if (repliedAt === null) {
+  if (attempt.repliedAt === null) {
     return null
   }
   if (attempt.refusalCode !== null) {
     return refusalLabelId(attempt.refusalCode)
   }
-  const progress = composeWakeProgress(
-    rebaseBrokerStages(attempt.brokerStages, repliedAt),
-    targetAnswerAfterPress({ pressedAt: attempt.pressedAt, repliedAt, snapshot, lastConnectedAt })
-  )
-  const stage = furthestWakeStage(progress)
-  return stage === null ? 'wake.unknown' : WAKE_STAGE_LABEL[stage]
+  const stage = wakeAttemptFurthestStage(attempt, snapshot, lastConnectedAt)
+  return stage === null || statusReadHidesStage(stage, attempt.statusReadCode)
+    ? 'wake.unknown'
+    : WAKE_STAGE_LABEL[stage]
 }
 
 // Why: the shared route decides whether a control exists; a packet sent is never a host woken (D-05, D-06).

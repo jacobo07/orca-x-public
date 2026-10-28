@@ -1,4 +1,4 @@
-import type { HostWakeStageRecord } from '../../../src/shared/host-wake'
+import { composeWakeProgress, type HostWakeStageRecord } from '../../../src/shared/host-wake'
 import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 
 type WakeStage = HostWakeStageRecord['stage']
@@ -61,4 +61,44 @@ export function furthestWakeStage(records: readonly HostWakeStageRecord[]): Wake
     }
   }
   return furthest
+}
+
+type WakeAttemptEvidence = {
+  pressedAt: number
+  repliedAt: number | null
+  refusalCode: string | null
+  brokerStages: unknown
+}
+
+// Why one composition: the card, its focus re-read and attempt pruning must agree on how far a wake got.
+export function wakeAttemptFurthestStage(
+  attempt: WakeAttemptEvidence,
+  snapshot: HomeHostStatusSnapshot | undefined,
+  lastConnectedAt: number | null
+): WakeStage | null {
+  const { repliedAt } = attempt
+  if (repliedAt === null || attempt.refusalCode !== null) {
+    return null
+  }
+  const progress = composeWakeProgress(
+    rebaseBrokerStages(attempt.brokerStages, repliedAt),
+    targetAnswerAfterPress({ pressedAt: attempt.pressedAt, repliedAt, snapshot, lastConnectedAt })
+  )
+  return furthestWakeStage(progress)
+}
+
+export function isTargetObservedStage(stage: WakeStage | null): boolean {
+  return stage === 'host-announced' || stage === 'runtime-ready'
+}
+
+// Why: the target's own answer outranks any read; wake_unknown (record forgotten) keeps what the broker saw.
+export function statusReadHidesStage(
+  stage: WakeStage,
+  statusReadCode: string | undefined
+): boolean {
+  return (
+    !isTargetObservedStage(stage) &&
+    statusReadCode !== undefined &&
+    statusReadCode !== 'wake_unknown'
+  )
 }
