@@ -20,6 +20,7 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 - [ ] **Phase 18: Availability state, capabilities and a truthful host card** - Three composed dimensions (power, orca, connectivity), capabilities kept apart from state and authority, and a mobile host card that never renders powered-off or Wake without evidence, enforced by a gate.
 - [ ] **Phase 19: Wake-on-LAN capability and the LAN Wake Broker (M2)** - Measured WOL capability, a broker role inside the Host Fabric, a REMOTE_WAKE grant, idempotent requests and evidence-staged readiness transitions; the LAN Product Reality is OWNER_BOUND on the admin and BIOS steps.
 - [ ] **Phase 20: Off-LAN wake, OOB boundary and institutional close (M3, M4)** - Phone on 5G to broker over the outbound relay; the OOB interface with a test-double boundary (no AMT on this hardware: HARDWARE_BOUND); failure injection, mutants, Knowledge Vault, UKDL, baseline ratchet, fresh-agent test and the two-layer handoff.
+- [ ] **Phase 21: Mobile Wake control on the host card** - Wake from a sleeping host's card through the broker that answered this session (target bound to host identity, no MAC on the phone), evidence-staged labels, the claims gate scoped per control with mutants; phone leg owed.
 
 ## Phase Details
 
@@ -171,3 +172,12 @@ Plans:
 - [x] 20-03-PLAN.md — shared wake-proxy-available composer (rows K, M; UNIT, unrendered), old-client additive pin, OOB power contract + test-only double + import sweep (wave 1)
 - [x] 20-04-PLAN.md — G6 capability-producer ratchet inside check:host-card-claims (all six ids classified), rule table, ten mutants K/M/O/W/G (wave 2)
 - [x] 20-05-PLAN.md — reference note + AGENTS.md link, one vault lesson, UKDL proposal, OOB live evidence, 20-VERIFICATION.md (M3 OWNER_BOUND, M4 HARDWARE_BOUND), STATE.md two-layer handoff, fresh-agent question set (orchestrator runs the agent) (wave 3)
+
+### Phase 21: Mobile Wake control on the host card
+
+**Goal**: A paired phone can ask its broker to wake a sleeping host from that host's card, and the card shows the wake's evidence stages truthfully. **Depends on**: Phase 20 (closes 19 D-13)
+**Success Criteria** (what must be TRUE):
+
+1. Cross-host routing from evidence: the card of a target host offers Wake only when a broker answered in this session (`host.wake-broker.v1` plus a `host.wake.targets` entry bound to that host's identity), and the request goes to that broker; no binding, no control. No MAC reaches the phone.
+2. Stages render as labels from one presenter table (requested, authorized, packet-sent, then host-announced only from the target's own answer); "Woken" never renders from a broker stage; refusal codes render as their own states.
+3. `check:host-card-claims` classifies the Wake control with its backend method and the new stage labels, the effect-wording check is scoped per control (no weakening when the first effect control lands), and mutants for both are CAUGHT; mobile tests run on a GEX44 disposable root; the phone leg is owed as human_needed.
