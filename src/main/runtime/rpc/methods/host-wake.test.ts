@@ -68,15 +68,12 @@ function fakeAuthority(): WakeDeviceAuthority {
   }
 }
 
-function enableBroker(options: { attachAuthority?: boolean } = {}): void {
-  const store = memoryStore(
-    [T1, T2],
-    [
-      ['dev-a', T1.targetId],
-      ['dev-a', REMOVED_TARGET_ID],
-      ['dev-b', T2.targetId]
-    ]
-  )
+function enableBroker(options: { attachAuthority?: boolean; targets?: WakeTarget[] } = {}): void {
+  const store = memoryStore(options.targets ?? [T1, T2], [
+    ['dev-a', T1.targetId],
+    ['dev-a', REMOVED_TARGET_ID],
+    ['dev-b', T2.targetId]
+  ])
   const broker = createWakeBroker({
     now: () => clock,
     store,
@@ -128,6 +125,9 @@ async function expectRefusal(outcome: Promise<Outcome>, code: string): Promise<v
 }
 
 const REQUEST = { targetId: T1.targetId, requestId: 'req-00000001' }
+const BOUND_REQUEST = { targetId: T2.targetId, requestId: 'req-00000010' }
+const OTHER_HOST_KEY = fingerprintHostKeyBytes(Buffer.alloc(32, 3))
+const B_CTX = (): RpcContext => deviceCtx('tok-b', 'dev-b')
 
 describe('host.wake.* phone methods', () => {
   afterEach(() => {
@@ -217,6 +217,53 @@ describe('host.wake.* phone methods', () => {
       'wake_target_unknown'
     )
     expect(sent).toHaveLength(0)
+  })
+
+  it('refuses wake_target_rebound when the target is bound to another host key (WR-03)', async () => {
+    enableBroker()
+    await expectRefusal(
+      call('host.wake.request', { ...BOUND_REQUEST, hostKey: OTHER_HOST_KEY }, B_CTX()),
+      'wake_target_rebound'
+    )
+    expect(sent).toHaveLength(0)
+  })
+
+  it('refuses wake_target_rebound when a host key is sent for an unbound target (WR-03)', async () => {
+    enableBroker()
+    await expectRefusal(
+      call('host.wake.request', { ...REQUEST, hostKey: HOST_KEY }, deviceCtx('tok-a', 'dev-a')),
+      'wake_target_rebound'
+    )
+    expect(sent).toHaveLength(0)
+  })
+
+  it('sends exactly one frame when the sent host key equals the binding (WR-03)', async () => {
+    enableBroker()
+    const outcome = await call(
+      'host.wake.request',
+      { ...BOUND_REQUEST, hostKey: HOST_KEY },
+      B_CTX()
+    )
+    expect(outcome.ok).toBe(true)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].port).toBe(T2.port)
+  })
+
+  it('keeps the legacy behaviour when no host key is sent, bound or not (WR-03)', async () => {
+    enableBroker()
+    expect((await call('host.wake.request', BOUND_REQUEST, B_CTX())).ok).toBe(true)
+    expect((await call('host.wake.request', REQUEST, deviceCtx('tok-a', 'dev-a'))).ok).toBe(true)
+    expect(sent).toHaveLength(2)
+  })
+
+  it('refuses the replay of a sent request once its target was rebound (WR-03)', async () => {
+    const rebindable: WakeTarget = { ...T2 }
+    enableBroker({ targets: [T1, rebindable] })
+    const pressed = { ...BOUND_REQUEST, hostKey: HOST_KEY }
+    expect((await call('host.wake.request', pressed, B_CTX())).ok).toBe(true)
+    rebindable.hostKey = OTHER_HOST_KEY
+    await expectRefusal(call('host.wake.request', pressed, B_CTX()), 'wake_target_rebound')
+    expect(sent).toHaveLength(1)
   })
 
   it('sends exactly one 102-byte frame for a granted device and returns the three broker stages', async () => {

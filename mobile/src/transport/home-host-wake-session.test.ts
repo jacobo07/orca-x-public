@@ -240,7 +240,12 @@ describe('fetchHomeHostWakeTargets', () => {
         brokers: sessionBrokers(store.current['host-a']),
         clients: [{ hostId: 'host-a', client: broker.client }]
       })
-    ).toEqual({ client: broker.client, brokerHostId: 'host-a', targetId: TARGET_ID })
+    ).toEqual({
+      client: broker.client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY
+    })
   })
 
   it('stores an answer without a targets array as unreadable, never as targets', async () => {
@@ -279,7 +284,13 @@ describe('a press on a bound card', () => {
         { hostId: 'host-t', client: target.client }
       ]
     })
-    expect(plan).toEqual({ client: broker.client, brokerHostId: 'host-a', targetId: TARGET_ID })
+    // Why hostKey: the broker refuses wake_target_rebound if the target no longer names this card's host (WR-03).
+    expect(plan).toEqual({
+      client: broker.client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY
+    })
     const pressed = vi.fn()
 
     const done = requestHostWake({
@@ -297,7 +308,10 @@ describe('a press on a bound card', () => {
     const attempt = await done
 
     expect(broker.calls).toEqual([
-      { method: 'host.wake.request', params: { targetId: TARGET_ID, requestId: 'req-00000001' } }
+      {
+        method: 'host.wake.request',
+        params: { targetId: TARGET_ID, requestId: 'req-00000001', hostKey: VECTOR_HOST_KEY }
+      }
     ])
     expect(target.calls).toEqual([])
     expect(attempt).toEqual({
@@ -386,6 +400,7 @@ describe('a press on a bound card', () => {
       client: broker.client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })
@@ -456,7 +471,7 @@ describe('a press on a bound card', () => {
     const attempt = await done
 
     expect(broker.calls).toHaveLength(1)
-    expect(broker.calls[0]?.params).toMatchObject({ targetId: TARGET_ID })
+    expect(broker.calls[0]?.params).toMatchObject({ targetId: TARGET_ID, hostKey: VECTOR_HOST_KEY })
     expect(attempt).toMatchObject({ brokerHostId: 'host-a', targetId: TARGET_ID, wakeId: 'wake-1' })
   })
 })
@@ -644,6 +659,7 @@ describe('a wake refusal stays a wake state', () => {
       client: broker.client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })
@@ -662,6 +678,7 @@ describe('a wake refusal stays a wake state', () => {
       client: broker.client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })
@@ -800,6 +817,7 @@ describe('a wake refusal through a real RpcClient', () => {
       client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })
@@ -838,6 +856,7 @@ describe('a wake refusal through a real RpcClient', () => {
       client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })
@@ -866,6 +885,7 @@ describe('a wake refusal through a real RpcClient', () => {
       client,
       brokerHostId: 'host-a',
       targetId: TARGET_ID,
+      hostKey: VECTOR_HOST_KEY,
       requestId: 'req-00000001',
       now: phoneClock(5_000)
     })

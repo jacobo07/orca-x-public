@@ -386,8 +386,18 @@ describe('presentHostCardWake', () => {
       code !== 'host_key_unavailable'
   )
 
-  it('refusals: eleven phone refusal codes, each with its own label', () => {
-    expect(PHONE_REFUSALS).toHaveLength(11)
+  it('refusals: twelve phone refusal codes, each with its own label', () => {
+    expect(PHONE_REFUSALS).toHaveLength(12)
+  })
+
+  it('refusals: a target rebound to another host says so, warning, never a stage (WR-03)', () => {
+    const projection = presentWake({
+      attempt: attempt({ refusalCode: 'wake_target_rebound', brokerStages: [] })
+    })
+
+    expect(projection.stageLabelId).toBe('wake.wake_target_rebound')
+    expect(projection.stageText).toBe('Wake refused: target bound to another host')
+    expect(projection.tone).toBe('warning')
   })
 
   it.each(PHONE_REFUSALS)('refusals: %s shows its own label with tone warning', (code) => {
@@ -458,10 +468,10 @@ describe('presentHostCardWake', () => {
     }
   })
 
-  it('table: 41 labels, exactly 19 of them wake.*', () => {
+  it('table: 42 labels, exactly 20 of them wake.*', () => {
     const keys = Object.keys(HOST_CARD_LABELS)
-    expect(keys).toHaveLength(41)
-    expect(keys.filter((key) => key.startsWith('wake.'))).toHaveLength(19)
+    expect(keys).toHaveLength(42)
+    expect(keys.filter((key) => key.startsWith('wake.'))).toHaveLength(20)
   })
 })
 
