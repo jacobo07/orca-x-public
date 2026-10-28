@@ -21,9 +21,20 @@ const ATTACH_DEADLINE_MS = 5000
 const TARGET_MAC = '02:00:5e:20:00:01'
 const TARGET_LABEL = 'Relay loopback'
 
+type PhoneHandshakeState = 'relay-hello' | 'e2ee-ready' | 'e2ee-authenticated' | 'ready'
+
+// Why a cause, not a boolean: a refused binding must be told apart from a slow or broken splice.
+export type RelayHandshake = {
+  ready: boolean
+  endedIn: PhoneHandshakeState
+  cause: 'authenticated' | 'e2ee_error' | 'timeout' | 'closed' | 'protocol'
+  e2eeError: unknown
+}
+
 export type RelayPhone = {
   connId: string
   ready: Promise<boolean>
+  handshake: Promise<RelayHandshake>
   call(method: string, params: unknown): Promise<Record<string, unknown>>
   close(): void
 }
@@ -50,26 +61,34 @@ type PhonePeerArgs = {
 }
 
 function openPhonePeer(args: PhonePeerArgs) {
-  const socket = new WebSocket(args.url, { perMessageDeflate: false })
+  const socket = new WebSocket(args.url, {
+    perMessageDeflate: false,
+    handshakeTimeout: READY_TIMEOUT_MS
+  })
   const peer = new SimulatedMobileE2EEV2Peer(
     nacl.box.keyPair(),
     args.desktopPublicKey,
     args.relayHostId
   )
   const waiters = new Map<string, (reply: Record<string, unknown>) => void>()
-  let state: 'relay-hello' | 'e2ee-ready' | 'e2ee-authenticated' | 'ready' = 'relay-hello'
-  let settleReady: (ready: boolean) => void = () => undefined
-  const handshake = new Promise<boolean>((resolve) => {
-    settleReady = resolve
+  let state: PhoneHandshakeState = 'relay-hello'
+  let resolveHandshake: (outcome: RelayHandshake) => void = () => undefined
+  const handshake = new Promise<RelayHandshake>((resolve) => {
+    resolveHandshake = resolve
   })
-  const timer = setTimeout(() => settleReady(false), READY_TIMEOUT_MS)
-  const ready = handshake.finally(() => clearTimeout(timer))
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const settle = (cause: RelayHandshake['cause'], e2eeError: unknown = null): void => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+    resolveHandshake({ ready: cause === 'authenticated', endedIn: state, cause, e2eeError })
+  }
 
   const onHandshakeFrame = (raw: RawData): void => {
     if (state === 'relay-hello') {
       const hello = parseJsonObject(raw.toString())
       if (hello?.type !== 'relay-hello' || hello.ok !== true) {
-        settleReady(false)
+        settle('protocol')
         return
       }
       state = 'e2ee-ready'
@@ -77,7 +96,7 @@ function openPhonePeer(args: PhonePeerArgs) {
       return
     }
     if (!peer.acceptReady(parseJsonObject(raw.toString()))) {
-      settleReady(false)
+      settle('protocol')
       return
     }
     state = 'e2ee-authenticated'
@@ -85,13 +104,15 @@ function openPhonePeer(args: PhonePeerArgs) {
     socket.send(peer.sealText(JSON.stringify({ ...auth, deviceToken: args.deviceToken })))
   }
 
-  socket.once('open', () =>
+  socket.once('open', () => {
+    // Why from open: the 2000 ms bound is the handshake's, not the loopback connect's under load.
+    timer = setTimeout(() => settle('timeout'), READY_TIMEOUT_MS)
     socket.send(
       JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: args.credential })
     )
-  )
-  socket.once('close', () => settleReady(false))
-  socket.on('error', () => settleReady(false))
+  })
+  socket.once('close', () => settle('closed'))
+  socket.on('error', () => settle('closed'))
   socket.on('message', (raw, isBinary) => {
     if (state === 'relay-hello' || state === 'e2ee-ready') {
       onHandshakeFrame(raw)
@@ -104,8 +125,12 @@ function openPhonePeer(args: PhonePeerArgs) {
     }
     const message = parseJsonObject(peer.openText(raw.toString()))
     if (state === 'e2ee-authenticated') {
-      state = message?.type === 'e2ee_authenticated' ? 'ready' : state
-      settleReady(state === 'ready')
+      if (message?.type === 'e2ee_authenticated') {
+        state = 'ready'
+        settle('authenticated')
+      } else {
+        settle(message?.type === 'e2ee_error' ? 'e2ee_error' : 'protocol', message?.error ?? null)
+      }
       return
     }
     if (message && typeof message.id === 'string') {
@@ -129,7 +154,7 @@ function openPhonePeer(args: PhonePeerArgs) {
       socket.send(peer.sealText(JSON.stringify({ id, method, params })))
     })
   }
-  return { ready, socket, call }
+  return { handshake, ready: handshake.then((outcome) => outcome.ready), socket, call }
 }
 
 export async function startRelayWakeHarness(options: {
@@ -218,7 +243,13 @@ export async function startRelayWakeHarness(options: {
         relayHostId
       })
       phoneSockets.push(phone.socket)
-      return { connId, ready: phone.ready, call: phone.call, close: () => phone.socket.close() }
+      return {
+        connId,
+        ready: phone.ready,
+        handshake: phone.handshake,
+        call: phone.call,
+        close: () => phone.socket.close()
+      }
     },
     async close() {
       for (const socket of phoneSockets) {
