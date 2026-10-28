@@ -238,3 +238,14 @@ critical: 0 · warning: 1 · info: 5 · total: 6
 _Reviewed: 2026-10-27_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Deferred info fixes (2026-10-28)
+
+Second batch: IN-03. Committed in C:\owx-haf with hooks on; no worktree, so every test and gate below ran in this checkout.
+
+### IN-03: FIXED
+
+- **Prerequisite** (20-REVIEW IN-04): `getWindowsSystemToolPath` now accepts only a drive-qualified `SystemRoot`/`WINDIR` (RED `0fc1ab14e`, GREEN `49b2a3dcb`).
+- **RED** `01424873b`. `host-wol-probe.test.ts` › "spawns PowerShell and powercfg from System32 by absolute path, never by bare name (IN-03)", and the win32 harness now keys replies on the absolute System32 paths; `host-autostart-probe.test.ts` expects `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`; the producer and `status.get` fixtures pass the two new deps. `Tests  9 failed | 63 passed | 2 skipped (74)` before the fix.
+- **GREEN** `7bf4d6b53`. `HostWolProbeDeps` gains `windowsPowerShellPath` and `windowsPowercfgPath` (the OOB probe shape), defaulted through `getWindowsSystemToolPath`; the autostart probe, which the review's fix also names, resolves PowerShell from its own `deps.env`. `vitest run` of `host-wol-probe`, `host-autostart-probe`, `host-availability-producer`, `rpc/methods/status`, `startup/host-availability-wiring`: `Test Files  5 passed (5)` / `Tests  79 passed | 2 skipped (81)`.
+- Gates after the batch: `typecheck:node`, `typecheck:cli`, `typecheck:web` exit 0; `check:recurring-work` `total=236 ... debt=0`; `check:durability-contracts` passed (22 contracts, no new ones); `check:host-card-claims` exit 0 with the unchanged line in 20-REVIEW.md.

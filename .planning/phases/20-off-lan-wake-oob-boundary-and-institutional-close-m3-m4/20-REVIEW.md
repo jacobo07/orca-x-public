@@ -187,3 +187,24 @@ cell ticket and listener robustness) and **IN-04** (`getWindowsSystemToolPath` a
 _Reviewed: 2026-10-28_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Deferred info fixes (2026-10-28)
+
+IN-01, IN-03 and IN-04, plus the load-sensitive relay-dispatch test. Committed in C:\owx-haf with hooks on, RED before GREEN; no worktree, so every test and gate ran in this checkout. Nothing was pushed.
+
+| Finding | RED | GREEN | Evidence |
+|---|---|---|---|
+| IN-04 | `0fc1ab14e` | `49b2a3dcb` | A root counts only when drive-qualified (`^[A-Za-z]:[\\/]`); a missing or empty `SystemRoot` still falls through to `WINDIR` then `C:\Windows`, as the private ACL helper did. RED: 5 failed (`expected 'Windows\System32\powercfg.exe' to be 'C:\Windows\System32\powercfg.exe'`, plus `C:Windows`, `\Windows`, `.\Windows` and relative-SystemRoot-with-absolute-WINDIR). GREEN: `windows-system-tool-path` + `host-oob-probe` -> `Tests  24 passed (24)`. |
+| IN-03 | `275305bf3` | `cda7a194e` | New `loopback-relay-cell.test.ts`. A host leg is admitted only when the registered ticket and the frame's `connTicket` are both strings and equal; a malformed `%E0%A4%A` path closes 4003 instead of throwing `URIError`; the listen races `'listening'` against `'error'` (a `port` option makes that testable). RED: `Tests  3 failed | 1 passed (4)` (two 2000 ms timeouts, one resolved listen, `URIError: URI malformed` unhandled). GREEN with `wake-broker-relay-test-harness` and `wake-broker-relay-dispatch`: `Tests  14 passed (14)`. |
+| IN-01 | `d2f83d1bc` | `141591830` | `stripComments` is a scanner that skips strings, templates and regex literals, so a trailing `//` is blanked and `/*` inside a string hides nothing. Supported is caught as a quoted, template or quoted-key literal, a module constant flowing into `value:`, and a shorthand local. R5/R7 now require an allowed kind in the `evidence` property of the same object literal (inline, or an identifier declared with an object quoting it), so `{ value: 'supported', evidence: null }` fails even when the kind is quoted elsewhere. RED: `Tests  9 failed | 23 passed (32)`. GREEN: `host-capability-producer-gate` + `check-host-card-claims` tests -> `Tests  64 passed (64)`. Not done soundly by a scan, so named in both headers as known limits: a constant imported from another module, a computed or spread value, and an evidence identifier reassigned after its declaration. Lines: gate 352 before formatting, check-host-card-claims 553; both under 600. |
+
+The success line did not change, so STATE.md, 20-VERIFICATION.md and docs/reference/host-wake-broker.md were not edited:
+`check-host-card-claims: 22 labels classified, 2 controls classified, 598 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
+
+### Load-sensitive test: not reproduced in 3 runs, wall-clock row hardened
+
+- The exact 10-file command (`wake-broker-relay-dispatch`, `wake-broker`, `wake-broker-store`, `wake-broker-host`, `wake-broker-revoke-in-process`, `host-wake`, `host-wake-admin`, `cli/handlers/wake`, `shared/host-wake`, `wake-broker-relay-test-harness`) ran 3 times: each `Test Files  10 passed (10)` / `Tests  139 passed (139)`. Run 3 overlapped the typecheck gates and the harness edit below, so runs 1 and 2 are the clean pre-fix evidence.
+- The only wall-clock wait behind `phone.ready` was the phone's `READY_TIMEOUT_MS` (2000 ms) timer, started at socket open. That also counted the wait for `relay-hello`, which the cell sends only once the host's data leg has attached, and the host bounds that attach by `ATTACH_DEADLINE_MS` (5000 ms). Under load, a slow host attach could therefore read as a failed handshake.
+- **Fix** `0e4127be6` (no RED: not reproduced, and a deterministic splice delay would need a new cell hook). The phone now waits up to `ATTACH_DEADLINE_MS` for the splice and restarts the 2000 ms bound at `relay-hello`. No assertion changed. The refusal row still ends in `e2ee_error` after the splice, so it is not slowed. After the fix the 10-file command passed again: `Tests  139 passed (139)`.
+
+Gates after the batch: `typecheck:node`, `typecheck:cli`, `typecheck:web` exit 0; `check:recurring-work` `total=236 ... debt=0`; `check:durability-contracts` passed (22 contracts, no new ones); `check:host-card-claims` exit 0 with the line above.
