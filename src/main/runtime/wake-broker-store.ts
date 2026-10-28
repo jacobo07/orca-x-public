@@ -2,19 +2,24 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs'
 import { isIPv4 } from 'node:net'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
 import { hostWakeRefusal } from '../../shared/host-wake'
 import { normalizeMac } from './wake-magic-packet'
 import type { WakeBrokerStoreView, WakeTarget } from './wake-broker'
+import {
+  emptyWakeBrokerState,
+  ID_MAX,
+  isPort,
+  LABEL_MAX,
+  parseWakeBrokerState,
+  type WakeBrokerState,
+  type WakeGrant
+} from './wake-broker-state-schema'
+
+export type { WakeGrant } from './wake-broker-state-schema'
 
 export const WAKE_BROKER_STATE_FILENAME = 'orca-wake-broker.json'
-
-const STATE_SCHEMA = 1
-const TARGET_ID_FORM = /^wt_[0-9a-f]{12}$/
-const LABEL_MAX = 64
-const ID_MAX = 128
-
-export type WakeGrant = { deviceId: string; targetId: string; grantedAt: number }
 
 export type WakeTargetInput = { mac: string; broadcast: string; port: number; label: string }
 
@@ -45,80 +50,8 @@ export type WakeBrokerStoreDeps = {
   now?: () => number
 }
 
-type WakeBrokerState = { schema: typeof STATE_SCHEMA; targets: WakeTarget[]; grants: WakeGrant[] }
-
 function invalidArgument(message: string): Error {
   return Object.assign(new Error(message), { code: 'invalid_argument' })
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPort(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65_535
-}
-
-function isStoredTarget(value: unknown): value is WakeTarget {
-  return (
-    isRecord(value) &&
-    typeof value.targetId === 'string' &&
-    TARGET_ID_FORM.test(value.targetId) &&
-    typeof value.mac === 'string' &&
-    normalizeMac(value.mac) === value.mac &&
-    typeof value.broadcast === 'string' &&
-    isIPv4(value.broadcast) &&
-    isPort(value.port) &&
-    typeof value.label === 'string' &&
-    value.label.length <= LABEL_MAX &&
-    typeof value.createdAt === 'number' &&
-    Number.isFinite(value.createdAt)
-  )
-}
-
-function isStoredGrant(value: unknown): value is WakeGrant {
-  return (
-    isRecord(value) &&
-    typeof value.deviceId === 'string' &&
-    value.deviceId.length > 0 &&
-    value.deviceId.length <= ID_MAX &&
-    typeof value.targetId === 'string' &&
-    TARGET_ID_FORM.test(value.targetId) &&
-    typeof value.grantedAt === 'number' &&
-    Number.isFinite(value.grantedAt)
-  )
-}
-
-function isNewerSchema(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.schema === 'number' &&
-    Number.isInteger(value.schema) &&
-    value.schema > STATE_SCHEMA
-  )
-}
-
-function parseState(raw: string): WakeBrokerState | 'newer_schema' | null {
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  if (isNewerSchema(value)) {
-    return 'newer_schema'
-  }
-  if (!isRecord(value) || value.schema !== STATE_SCHEMA) {
-    return null
-  }
-  const { targets, grants } = value
-  if (!Array.isArray(targets) || !targets.every(isStoredTarget)) {
-    return null
-  }
-  if (!Array.isArray(grants) || !grants.every(isStoredGrant)) {
-    return null
-  }
-  return { schema: STATE_SCHEMA, targets, grants }
 }
 
 function mintTargetId(taken: readonly WakeTarget[]): string {
@@ -131,6 +64,25 @@ function mintTargetId(taken: readonly WakeTarget[]): string {
   }
 }
 
+const STORAGE_ERROR_CODE = /^[A-Za-z0-9_]{1,64}$/
+
+function storageErrorCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === 'string' && STORAGE_ERROR_CODE.test(code) ? code : 'publish_failed'
+}
+
+function readStateAfterFailedPublish(statePath: string): WakeBrokerState | null {
+  let raw: string
+  try {
+    raw = readFileSync(statePath, 'utf-8')
+  } catch (error) {
+    // Why ENOENT is empty: before the first addition there is no file, and a missing file loads as empty.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? emptyWakeBrokerState() : null
+  }
+  const parsed = parseWakeBrokerState(raw)
+  return parsed === 'newer_schema' ? null : parsed
+}
+
 function createStore(
   statePath: string,
   initial: WakeBrokerState,
@@ -140,8 +92,30 @@ function createStore(
   let state = initial
 
   // Why disk first: an addition is not valid until it is durable.
+  // Why reconcile on a throw: writeSecureFile can fail after its rename (chmod, directory fsync), and an addition
+  // already on disk loads on restart, so it must never be reported as a definite failure (IN-05).
   function commitAddition(next: WakeBrokerState): void {
-    publish(statePath, next)
+    try {
+      publish(statePath, next)
+    } catch (error) {
+      const onDisk = readStateAfterFailedPublish(statePath)
+      if (onDisk && isDeepStrictEqual(onDisk, state)) {
+        throw error
+      }
+      const active = onDisk !== null && isDeepStrictEqual(onDisk, next)
+      if (active) {
+        state = next
+      }
+      const cause = storageErrorCode(error)
+      console.error(`[wake-broker] state publish failed after it may have landed: ${cause}`)
+      throw hostWakeRefusal(
+        'wake_broker_state_indeterminate',
+        active
+          ? 'The change is on disk and active, but its write did not finish cleanly, so it may not survive a power loss.'
+          : 'The write failed and the state on disk could not be confirmed; the change is not active in this broker.',
+        { active, cause }
+      )
+    }
     state = next
   }
 
@@ -263,12 +237,7 @@ export function loadWakeBrokerStore(
       console.error('[wake-broker] userData could not be listed:', (error as Error).message)
       return { ok: false, reason: 'wake_broker_state_io_failed' }
     }
-    const store = createStore(
-      statePath,
-      { schema: STATE_SCHEMA, targets: [], grants: [] },
-      publish,
-      now
-    )
+    const store = createStore(statePath, emptyWakeBrokerState(), publish, now)
     return previousStateMovedAside
       ? { ok: true, store, previousStateMovedAside }
       : { ok: true, store }
@@ -282,7 +251,7 @@ export function loadWakeBrokerStore(
     console.error('[wake-broker] state file could not be read:', (error as Error).message)
     return { ok: false, reason: 'wake_broker_state_io_failed' }
   }
-  const state = parseState(raw)
+  const state = parseWakeBrokerState(raw)
   if (state === 'newer_schema') {
     // Why in place: an older Orca must never quarantine, and so lose, a newer host's targets and grants (IN-04).
     console.error('[wake-broker] state file was written by a newer Orca; leaving it untouched')

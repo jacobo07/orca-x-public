@@ -8,7 +8,8 @@ export const HOST_WAKE_REFUSAL_CODES = [
   'wake_grant_missing',
   'wake_target_unknown',
   'wake_send_failed',
-  'wake_unknown'
+  'wake_unknown',
+  'wake_broker_state_indeterminate'
 ] as const
 
 export type HostWakeRefusalCode = (typeof HOST_WAKE_REFUSAL_CODES)[number]
