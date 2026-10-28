@@ -3,6 +3,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import {
   composeHostWakeRoute,
   hostKeyFromPublicKeyB64,
+  parseHostWakeTargetsReply,
   type WakeRouteBroker
 } from '../../../src/shared/host-wake-proxy'
 import { HOST_WAKE_BROKER_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
@@ -82,9 +83,10 @@ export function fetchHomeHostWakeTargets(
         if (disposed() || !response.ok) {
           return
         }
+        // Why null on a malformed answer: the composer then reads it as unreadable, never as targets.
         const snapshot: HomeHostWakeTargetsSnapshot = {
           observedAt: Date.now(),
-          targets: response.result
+          targets: parseHostWakeTargetsReply(response.result)
         }
         setTargets((prev) => ({ ...prev, [hostId]: snapshot }))
       })

@@ -45,6 +45,11 @@ function isGrantedTarget(
   return isRecord(entry) && typeof entry.targetId === 'string' && typeof entry.label === 'string'
 }
 
+// Why one parser: host.wake.targets answers { targets: [...] } (targetsFor); the composer reads the array.
+export function parseHostWakeTargetsReply(result: unknown): unknown[] | null {
+  return isRecord(result) && Array.isArray(result.targets) ? result.targets : null
+}
+
 // Why: unknown is never unreachable, never powered off and never woken (D-05).
 // Read per broker by composeHostWakeRoute, which decides whether the mobile host card draws Wake.
 export function composeWakeProxyAvailability(inputs: WakeProxyInputs): WakeProxyObservation {
