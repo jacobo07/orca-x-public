@@ -46,7 +46,7 @@ function isGrantedTarget(
 }
 
 // Why: unknown is never unreachable, never powered off and never woken (D-05).
-// No UI consumer until the deferred mobile Wake control (19 D-13): UNIT, wired but unrendered.
+// Read per broker by composeHostWakeRoute, which decides whether the mobile host card draws Wake.
 export function composeWakeProxyAvailability(inputs: WakeProxyInputs): WakeProxyObservation {
   const { broker, status, targets } = inputs
   if (!broker.connected || broker.lastConnectedAt === null) {
