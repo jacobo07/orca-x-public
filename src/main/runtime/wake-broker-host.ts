@@ -68,8 +68,18 @@ function errorCode(error: unknown): string {
 }
 
 export type WakeBrokerStart =
-  | { state: 'enabled'; targetCount: number }
+  | { state: 'enabled'; targetCount: number; previousStateMovedAside?: string }
   | { state: 'unavailable'; reason: string }
+
+export function formatWakeBrokerServeLine(start: WakeBrokerStart): string {
+  if (start.state === 'unavailable') {
+    return `[serve] wake broker: unavailable (${start.reason})`
+  }
+  const movedAside = start.previousStateMovedAside
+    ? `, previous state moved aside to ${start.previousStateMovedAside}`
+    : ''
+  return `[serve] wake broker: enabled (${start.targetCount} targets${movedAside})`
+}
 
 export type WakeBrokerStartDeps = {
   sendMagicPacket?: WakeBrokerDeps['sendMagicPacket']
@@ -106,7 +116,10 @@ export function startWakeBroker(
       console.error(`[wake-broker] grant prune not persisted: ${errorCode(error)}`)
     }
   }
-  return { state: 'enabled', targetCount: store.targets().length }
+  const targetCount = store.targets().length
+  return loaded.previousStateMovedAside
+    ? { state: 'enabled', targetCount, previousStateMovedAside: loaded.previousStateMovedAside }
+    : { state: 'enabled', targetCount }
 }
 
 function isPersistentStore(store: WakeBrokerStoreView): store is WakeBrokerStore {

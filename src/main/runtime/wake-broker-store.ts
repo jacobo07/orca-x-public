@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { existsSync, readFileSync, renameSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs'
 import { isIPv4 } from 'node:net'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
@@ -29,8 +29,16 @@ export type WakeBrokerStore = WakeBrokerStoreView & {
 }
 
 export type WakeBrokerStoreLoad =
-  | { ok: true; store: WakeBrokerStore }
-  | { ok: false; reason: 'wake_broker_state_unreadable' | 'wake_broker_state_io_failed' }
+  | { ok: true; store: WakeBrokerStore; previousStateMovedAside?: string }
+  | {
+      ok: false
+      reason:
+        | 'wake_broker_state_unreadable'
+        | 'wake_broker_state_io_failed'
+        | 'wake_broker_state_newer_schema'
+    }
+
+const MOVED_ASIDE_PREFIX = `${WAKE_BROKER_STATE_FILENAME}.corrupt-`
 
 export type WakeBrokerStoreDeps = {
   publish?: (targetPath: string, value: unknown) => void
@@ -81,12 +89,24 @@ function isStoredGrant(value: unknown): value is WakeGrant {
   )
 }
 
-function parseState(raw: string): WakeBrokerState | null {
+function isNewerSchema(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.schema === 'number' &&
+    Number.isInteger(value.schema) &&
+    value.schema > STATE_SCHEMA
+  )
+}
+
+function parseState(raw: string): WakeBrokerState | 'newer_schema' | null {
   let value: unknown
   try {
     value = JSON.parse(raw)
   } catch {
     return null
+  }
+  if (isNewerSchema(value)) {
+    return 'newer_schema'
   }
   if (!isRecord(value) || value.schema !== STATE_SCHEMA) {
     return null
@@ -214,6 +234,17 @@ function createStore(
   }
 }
 
+function latestMovedAsideState(userDataPath: string): string | undefined {
+  if (!existsSync(userDataPath)) {
+    return undefined
+  }
+  const stamp = (name: string): number => Number(name.slice(MOVED_ASIDE_PREFIX.length))
+  return readdirSync(userDataPath)
+    .filter((name) => name.startsWith(MOVED_ASIDE_PREFIX))
+    .sort((a, b) => stamp(a) - stamp(b))
+    .at(-1)
+}
+
 export function loadWakeBrokerStore(
   userDataPath: string,
   deps: WakeBrokerStoreDeps = {}
@@ -224,10 +255,23 @@ export function loadWakeBrokerStore(
     ((targetPath: string, value: unknown) => writeDurableSecureJsonFile(targetPath, value))
   const now = deps.now ?? Date.now
   if (!existsSync(statePath)) {
-    return {
-      ok: true,
-      store: createStore(statePath, { schema: STATE_SCHEMA, targets: [], grants: [] }, publish, now)
+    let previousStateMovedAside: string | undefined
+    try {
+      // Why: after a quarantine the next start finds no file, and an empty broker must not read as a clean one (IN-04).
+      previousStateMovedAside = latestMovedAsideState(userDataPath)
+    } catch (error) {
+      console.error('[wake-broker] userData could not be listed:', (error as Error).message)
+      return { ok: false, reason: 'wake_broker_state_io_failed' }
     }
+    const store = createStore(
+      statePath,
+      { schema: STATE_SCHEMA, targets: [], grants: [] },
+      publish,
+      now
+    )
+    return previousStateMovedAside
+      ? { ok: true, store, previousStateMovedAside }
+      : { ok: true, store }
   }
   let raw: string
   try {
@@ -239,6 +283,11 @@ export function loadWakeBrokerStore(
     return { ok: false, reason: 'wake_broker_state_io_failed' }
   }
   const state = parseState(raw)
+  if (state === 'newer_schema') {
+    // Why in place: an older Orca must never quarantine, and so lose, a newer host's targets and grants (IN-04).
+    console.error('[wake-broker] state file was written by a newer Orca; leaving it untouched')
+    return { ok: false, reason: 'wake_broker_state_newer_schema' }
+  }
   if (!state) {
     // Why: unreadable is unknown, not empty; keep the bytes and fail closed so nothing publishes over them.
     try {

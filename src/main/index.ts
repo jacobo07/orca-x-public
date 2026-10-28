@@ -129,7 +129,7 @@ import {
 } from './runtime/host-autostart-probe'
 import { createHostOobProbe, defaultHostOobProbeDeps } from './runtime/host-oob-probe'
 import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
-import { startWakeBroker } from './runtime/wake-broker-host'
+import { formatWakeBrokerServeLine, startWakeBroker } from './runtime/wake-broker-host'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -3425,11 +3425,7 @@ void app.whenReady().then(async () => {
     hostOobProbe.read()
     // Why: the wake broker is an explicit role, never a default (D-04).
     if (serveOptions.wakeBroker) {
-      const wakeBroker = startWakeBroker(getCanonicalUserDataPath())
-      const wakeBrokerLine =
-        wakeBroker.state === 'enabled'
-          ? `[serve] wake broker: enabled (${wakeBroker.targetCount} targets)`
-          : `[serve] wake broker: unavailable (${wakeBroker.reason})`
+      const wakeBrokerLine = formatWakeBrokerServeLine(startWakeBroker(getCanonicalUserDataPath()))
       // Why stderr in machine modes: --serve-json and recipe output on stdout must stay unchanged.
       if (serveOptions.json || serveOptions.recipeJson) {
         console.error(wakeBrokerLine)
