@@ -462,7 +462,7 @@ describe('presentHostCardWake', () => {
     const observed = Object.entries(HOST_CARD_LABELS).filter(
       ([key]) => key.startsWith('wake.') && !TARGET_STAGE_LABELS.includes(key as HostCardLabelId)
     )
-    expect(observed).toHaveLength(17)
+    expect(observed).toHaveLength(18)
     for (const [, text] of observed) {
       expect(text).not.toMatch(WOKEN_WORDING)
     }
