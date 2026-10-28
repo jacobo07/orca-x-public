@@ -9,6 +9,8 @@
 //   evidence      the HOST_EVIDENCE_KINDS that can back the state — [] for an unknown, which must
 //                 SAY unknown, and [] for a name (a capability's title proves nothing by itself);
 //   why           one sentence someone can disagree with.
+//   observer      wake.* only: broker, target or phone; target only on host-announced/runtime-ready.
+// wakeModel is the module whose HOST_WAKE_* arrays are the wake.* suffixes (G7).
 // A control is a pressable in the card, identified by its literal testID, classified with:
 //   kind          "navigation" (phone-local, no effect wording) or "effect" (names `rpc`, a host RPC
 //                 method that exists);
@@ -33,6 +35,7 @@
   "card": "mobile/src/components/MobileHostCard.tsx",
   "presenter": "mobile/src/components/host-availability-presentation.ts",
   "model": "src/shared/host-availability.ts",
+  "wakeModel": "src/shared/host-wake.ts",
   "rpcMethodsDir": "src/main/runtime/rpc/methods",
   "labels": {
     "power.awake": {

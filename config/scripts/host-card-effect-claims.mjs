@@ -1,12 +1,31 @@
 /**
- * G5 scope for check-host-card-claims.mjs: effect wording is judged per control (D-08).
+ * G5 scope and G7 wake for check-host-card-claims.mjs (D-08).
  *
- * Effect wording (EFFECT_VERB) in the card passes only when the innermost control enclosing it is
- * classified `effect` with an `rpc` that is a host RPC method. A first effect control therefore cannot
- * legitimize wording elsewhere on the card, and an effect control nested inside another control fails.
+ * G5 scope: effect wording (EFFECT_VERB) in the card passes only when the innermost control enclosing
+ * it is classified `effect` with an `rpc` that is a host RPC method. A first effect control therefore
+ * cannot legitimize wording elsewhere on the card, and an effect control nested inside another control
+ * fails.
+ *
+ * G7 wake: `wake.<suffix>` labels take their suffixes from config.wakeModel (stages, refusal codes and
+ * card states). Each names who observed it:
+ *   W1 observer   broker, target or phone;
+ *   W2 target     only the stages the broker never writes (host-announced, runtime-ready) are target,
+ *                 produced by composeWakeProgress with evidence exactly live-response;
+ *   W3 wording    no other wake label may read as a woken host (WOKEN_WORDING).
+ * Wake labels with no wake vocabulary, or a config without wakeModel, fail rather than pass vacuously.
  *
  * Pure: `literalTestID` and the control tags arrive as parameters, so this module never imports the gate.
  */
+
+export const WOKEN_WORDING = /\b(?:woken|awake|on|up|ready|running|online|booted)\b/i
+export const WAKE_TARGET_PRODUCER = 'src/shared/host-wake.ts#composeWakeProgress'
+const WAKE_VOCABULARY_NAMES = Object.freeze([
+  'HOST_WAKE_STAGES',
+  'HOST_WAKE_BROKER_STAGES',
+  'HOST_WAKE_REFUSAL_CODES',
+  'HOST_WAKE_CARD_STATES'
+])
+const WAKE_OBSERVERS = Object.freeze(['broker', 'target', 'phone'])
 
 function lineOf(source, index) {
   return source.slice(0, index).split('\n').length
@@ -138,6 +157,115 @@ export function checkEffectWordingScope({
       failures.push(
         `${card}:${item.line} effect wording "${item.text}" but no effect control classified to a host RPC method encloses it`
       )
+    }
+  }
+}
+
+/** The wake arrays of the model (`export const NAME = [...] as const`) and their card union. */
+export function wakeVocabulary(source) {
+  const vocab = {}
+  for (const name of WAKE_VOCABULARY_NAMES) {
+    const match = new RegExp(
+      `export\\s+const\\s+${name}\\s*=\\s*\\[([^\\]]*)\\]\\s*as\\s+const`
+    ).exec(source)
+    if (match) {
+      // Why: a comment in the list (HOST_WAKE_REFUSAL_CODES has one, with an apostrophe) is no member.
+      const members = match[1].replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+      vocab[name] = [...members.matchAll(/(['"])([^'"\n]+)\1/g)].map((item) => item[2])
+    }
+  }
+  const stages = vocab.HOST_WAKE_STAGES
+  const codes = vocab.HOST_WAKE_REFUSAL_CODES
+  const states = vocab.HOST_WAKE_CARD_STATES
+  if (stages && codes && states) {
+    vocab.HOST_WAKE_CARD_VOCABULARY = [...stages, ...codes, ...states]
+  }
+  return vocab
+}
+
+function targetSuffixes(vocab) {
+  const stages = vocab?.HOST_WAKE_STAGES
+  const broker = vocab?.HOST_WAKE_BROKER_STAGES
+  // Why empty when unknown: then no label may be target, so a missing model fails closed.
+  return Array.isArray(stages) && Array.isArray(broker)
+    ? stages.filter((stage) => !broker.includes(stage))
+    : []
+}
+
+function checkTargetLabel(key, entry, failures) {
+  if (entry?.observer !== 'target') {
+    failures.push(
+      `label "${key}": observer must be target — only the woken host's own answer can say it`
+    )
+  }
+  if (entry?.producer !== WAKE_TARGET_PRODUCER) {
+    failures.push(
+      `label "${key}": producer must be ${WAKE_TARGET_PRODUCER}, which composes it from the target's answer after packet-sent`
+    )
+  }
+  const evidence = entry?.evidence
+  if (!Array.isArray(evidence) || evidence.length !== 1 || evidence[0] !== 'live-response') {
+    failures.push(`label "${key}": evidence must be exactly ["live-response"], the target's answer`)
+  }
+}
+
+function checkWakeLabel({ key, entry, text, targetOnly, failures }) {
+  const observer = entry?.observer
+  if (!WAKE_OBSERVERS.includes(observer)) {
+    failures.push(
+      `label "${key}": observer ${JSON.stringify(observer) ?? 'missing'} is not broker, target or phone`
+    )
+  }
+  const isTargetStage = targetOnly.includes(key.slice('wake.'.length))
+  if (isTargetStage) {
+    checkTargetLabel(key, entry, failures)
+  } else if (observer === 'target') {
+    failures.push(
+      `label "${key}": observer target is only for ${targetOnly.join(', ') || 'the stages the broker never writes'} — a broker or phone observation is not the host's answer`
+    )
+  }
+  if (!(isTargetStage && observer === 'target') && typeof text === 'string') {
+    if (WOKEN_WORDING.test(text)) {
+      failures.push(
+        `label "${key}" reads "${text}" — only the target's own answer may say the host woke`
+      )
+    }
+  }
+}
+
+/** W1-W3 over every `wake.` label, classified or rendered; returns how many were judged. */
+export function evaluateWakeLabels({ labels, rows, vocab, failures }) {
+  const classified = labels ?? {}
+  const keys = [...new Set([...Object.keys(classified), ...rows.keys()])].filter((key) =>
+    key.startsWith('wake.')
+  )
+  if (keys.length === 0) {
+    return 0
+  }
+  if (!Array.isArray(vocab?.HOST_WAKE_CARD_VOCABULARY)) {
+    failures.push(
+      `${keys.length} wake label(s) but no wake vocabulary (HOST_WAKE_CARD_VOCABULARY) — set wakeModel, or every wake rule passes unchecked`
+    )
+  }
+  const targetOnly = targetSuffixes(vocab)
+  for (const key of keys) {
+    const entry = Object.hasOwn(classified, key) ? classified[key] : undefined
+    checkWakeLabel({ key, entry, text: rows.get(key)?.text, targetOnly, failures })
+  }
+  return keys.length
+}
+
+export function checkWakeModel({ config, vocab, failures }) {
+  const model = config?.wakeModel
+  if (typeof model !== 'string' || model.trim() === '') {
+    failures.push(
+      'wakeModel is missing from the config — the wake label family would have no vocabulary to be checked against'
+    )
+    return
+  }
+  for (const name of WAKE_VOCABULARY_NAMES) {
+    if (!Array.isArray(vocab?.[name])) {
+      failures.push(`wake vocabulary ${name} not found in ${model}`)
     }
   }
 }

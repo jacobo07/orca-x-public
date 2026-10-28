@@ -31,6 +31,9 @@ export const HOST_WAKE_BROKER_STAGES = ['requested', 'authorized', 'packet-sent'
 
 export type HostWakeBrokerStage = (typeof HOST_WAKE_BROKER_STAGES)[number]
 
+// Why: the card states that are neither stages nor refusal codes, so the claims gate can classify them.
+export const HOST_WAKE_CARD_STATES = ['packet-send-failed', 'unknown', 'ambiguous-broker'] as const
+
 export type HostWakeStageRecord = {
   stage: HostWakeStage | 'packet-send-failed'
   observedAt: number

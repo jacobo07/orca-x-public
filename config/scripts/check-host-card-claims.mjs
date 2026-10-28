@@ -12,7 +12,12 @@ import {
   stringLiterals
 } from './check-workspace-surface-claims.mjs'
 import { evaluateCapabilityProducers } from './host-capability-producer-gate.mjs'
-import { checkEffectWordingScope } from './host-card-effect-claims.mjs'
+import {
+  checkEffectWordingScope,
+  checkWakeModel,
+  evaluateWakeLabels,
+  wakeVocabulary
+} from './host-card-effect-claims.mjs'
 
 /**
  * The phone's host card says only what a producer can prove (D-10).
@@ -32,6 +37,8 @@ import { checkEffectWordingScope } from './host-card-effect-claims.mjs'
  *                 (host-card-effect-claims.mjs)
  *   G6 producers  every capability id classified; supported only with evidence its producer quotes
  *                 (host-capability-producer-gate.mjs)
+ *   G7 wake       wake.* suffixes from wakeModel; every wake label names its observer, and only the
+ *                 target's own answer may say the host woke (host-card-effect-claims.mjs)
  *
  * Floors on labels, controls and RPC method names stop a scanner that matched nothing from
  * reporting a clean bill; a classification whose subject is gone is stale and fails.
@@ -57,7 +64,8 @@ const FAMILY_VOCABULARY = Object.freeze({
   orca: 'HOST_ORCA_STATES',
   capability: 'HOST_CAPABILITY_IDS',
   'capability-value': 'HOST_CAPABILITY_VALUES',
-  capabilities: null
+  capabilities: null,
+  wake: 'HOST_WAKE_CARD_VOCABULARY'
 })
 const CONTROL_TAGS = Object.freeze([
   'Pressable',
@@ -197,7 +205,7 @@ const EXPORT_OF = (symbol) =>
   new RegExp(
     `export\\s+(?:async\\s+)?(?:function|const|let|type|interface|class|enum)\\s+${symbol}\\b`
   )
-const CLAIM_FAMILIES = new Set(['power', 'orca', 'capability-value'])
+const CLAIM_FAMILIES = new Set(['power', 'orca', 'capability-value', 'wake'])
 const NAME_FAMILIES = new Set(['capability', 'capabilities'])
 const POWER_LOSS_KEYS = Object.freeze(['power.sleeping', 'power.hibernating', 'power.powered-off'])
 
@@ -455,6 +463,7 @@ export function evaluateHostCardClaims({ config, files, read, rpcMethods, vocab 
   const rows = new Map(table.map((row) => [row.key, row]))
   checkProducers({ labels, presenter, presenterSource, read, exists, failures })
   checkEvidence({ labels, rows, kinds: vocab?.HOST_EVIDENCE_KINDS, failures })
+  evaluateWakeLabels({ labels, rows, vocab, failures })
   checkPowerLoss({ labels, table, presenter, failures })
   const strippedCard = stripComments(cardSource)
   const actionCount = checkControls({
@@ -523,8 +532,8 @@ function methodSources(root, dir) {
   return out
 }
 
-export async function main(root = process.cwd()) {
-  const configText = readRepoFile(root, CONFIG_PATH)
+// Why configText is a parameter: a test can drop a key from the real config without a copied repo.
+export async function main(root = process.cwd(), configText = readRepoFile(root, CONFIG_PATH)) {
   if (configText === null) {
     console.error(`check-host-card-claims: ${CONFIG_PATH} is missing`)
     return 1
@@ -535,10 +544,16 @@ export async function main(root = process.cwd()) {
   )
   const read = (relative) => files.get(relative) ?? readRepoFile(root, relative)
   const rpcMethods = rpcMethodNames(methodSources(root, config.rpcMethodsDir))
-  const vocab = modelVocabulary(readRepoFile(root, config.model) ?? '')
+  const wakeSource = typeof config.wakeModel === 'string' ? read(config.wakeModel) : null
+  const vocab = {
+    ...modelVocabulary(readRepoFile(root, config.model) ?? ''),
+    ...wakeVocabulary(wakeSource ?? '')
+  }
   const result = evaluateHostCardClaims({ config, files, read, rpcMethods, vocab })
   const producers = evaluateCapabilityProducers({ config, read, vocab, stripComments })
-  const failures = [...result.failures, ...producers.failures]
+  const wakeFailures = []
+  checkWakeModel({ config, vocab, failures: wakeFailures })
+  const failures = [...result.failures, ...producers.failures, ...wakeFailures]
   if (failures.length > 0) {
     console.error(`check-host-card-claims: ${failures.length} problem(s)`)
     for (const failure of failures) {
