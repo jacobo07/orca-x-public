@@ -282,6 +282,70 @@ describe('parseHostAvailabilityAnnouncement', () => {
     expect(Object.keys(parsed.capabilities).sort()).toEqual([...HOST_CAPABILITY_IDS].sort())
   })
 
+  it('reads a phase 20 announcement as exactly the six phase 18 capability ids (row M)', () => {
+    expect(HOST_CAPABILITY_IDS).toEqual([
+      'can-start-orca',
+      'can-wake-lan',
+      'can-wake-remote',
+      'can-power-on-oob',
+      'can-relay',
+      'can-direct'
+    ])
+    const hostAvailability = {
+      schema: 1,
+      processKind: 'desktop',
+      observedAt: T,
+      capabilities: {
+        'can-start-orca': goodEntry(),
+        'can-wake-lan': goodEntry(),
+        'can-wake-remote': {
+          value: 'not-configured',
+          reason: 'no_wake_broker',
+          evidence: { kind: 'host-announced', observedAt: T }
+        },
+        'can-power-on-oob': {
+          value: 'not-supported',
+          reason: 'hardware_bound_amd_no_amt',
+          evidence: { kind: 'os-probe', observedAt: T }
+        },
+        'can-relay': goodEntry(),
+        'can-direct': goodEntry()
+      }
+    }
+    expect(Object.keys(hostAvailability)).toEqual([
+      'schema',
+      'processKind',
+      'observedAt',
+      'capabilities'
+    ])
+    const parsed = parseHostAvailabilityAnnouncement(announcing(hostAvailability))
+    expect(Object.keys(parsed.capabilities)).toEqual([...HOST_CAPABILITY_IDS])
+    for (const id of HOST_CAPABILITY_IDS) {
+      expect(parsed.capabilities[id].reason, id).not.toBe('unspecified')
+    }
+    expect(parsed.capabilities['can-power-on-oob']).toMatchObject({
+      value: 'not-supported',
+      reason: 'hardware_bound_amd_no_amt'
+    })
+    expect(parsed.capabilities['can-wake-remote']).toMatchObject({
+      value: 'not-configured',
+      reason: 'no_wake_broker'
+    })
+  })
+
+  it('lets an old client ignore a capability id added after phase 18 (row M)', () => {
+    const parsed = parseHostAvailabilityAnnouncement(
+      announcing({
+        schema: 1,
+        processKind: 'serve',
+        observedAt: T,
+        capabilities: { 'can-relay': goodEntry(), 'can-wake-proxy': goodEntry() }
+      })
+    )
+    expect(Object.keys(parsed.capabilities)).toEqual([...HOST_CAPABILITY_IDS])
+    expect(parsed.capabilities['can-relay']).toEqual(goodEntry())
+  })
+
   it('never throws on hostile input', () => {
     const hostile: unknown[] = [
       null,
