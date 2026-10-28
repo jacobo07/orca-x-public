@@ -292,7 +292,7 @@ describe('orca wake refuses the SSH relay bridge and remote retargeting', () => 
     async (_caller, cwd) => {
       const refusal = createWakeHandlers({ ORCA_CLI_CWD: cwd })['wake grant list'](context([]))
       await expect(refusal).rejects.toMatchObject({ code: 'remote_invocation_refused' })
-      const { message } = await refusal.catch((error: Error) => error)
+      const { message } = (await refusal.catch((error: unknown) => error)) as Error
       expect(message).toContain('remote or bridged shell (SSH relay or WSL)')
       expect(message).not.toContain('not through a remote SSH session')
       expect(callMock).not.toHaveBeenCalled()
