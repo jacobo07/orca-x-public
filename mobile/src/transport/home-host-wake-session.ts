@@ -128,7 +128,12 @@ export function brokerRouteInputs(
   }))
 }
 
-export type HostWakePressPlan = { client: RpcClient; brokerHostId: string; targetId: string }
+export type HostWakePressPlan = {
+  client: RpcClient
+  brokerHostId: string
+  targetId: string
+  hostKey: string
+}
 
 // Why recompose at press time: the route the card drew may be stale; only the composer may pick a broker.
 export function planHostWakePress(input: {
@@ -138,7 +143,7 @@ export function planHostWakePress(input: {
   clients: readonly HostWakeClientEntry[]
 }): HostWakePressPlan | null {
   const route = composeHostWakeRoute(input)
-  if (!route.send) {
+  if (!route.send || input.hostKey === null) {
     return null
   }
   const entry = input.clients.find((candidate) => candidate.hostId === route.brokerHostId)
@@ -146,7 +151,13 @@ export function planHostWakePress(input: {
   if (!entry || entry.client.getState() !== 'connected') {
     return null
   }
-  return { client: entry.client, brokerHostId: route.brokerHostId, targetId: route.targetId }
+  // Why the card's key: the broker refuses wake_target_rebound when the target no longer names this host (WR-03).
+  return {
+    client: entry.client,
+    brokerHostId: route.brokerHostId,
+    targetId: route.targetId,
+    hostKey: input.hostKey
+  }
 }
 
 function refusalCodeOf(error: { code?: unknown }): string {
@@ -158,6 +169,7 @@ export async function requestHostWake(input: {
   client: RpcClient
   brokerHostId: string
   targetId: string
+  hostKey: string
   requestId: string
   now: () => number
   onPressed?: (attempt: HostCardWakeAttempt) => void
@@ -177,7 +189,7 @@ export async function requestHostWake(input: {
   try {
     response = await input.client.sendRequest(
       'host.wake.request',
-      { targetId: input.targetId, requestId: input.requestId },
+      { targetId: input.targetId, requestId: input.requestId, hostKey: input.hostKey },
       HOST_WAKE_RPC_OPTIONS
     )
   } catch {

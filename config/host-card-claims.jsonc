@@ -236,6 +236,12 @@
       "observer": "broker",
       "why": "The broker refused because the target id is no longer in its store, so the binding is stale"
     },
+    "wake.wake_target_rebound": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because the target is now bound to a host key other than this card's, so it sent nothing rather than wake another host"
+    },
     "wake.wake_send_failed": {
       "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
       "evidence": ["live-response"],

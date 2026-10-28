@@ -7,6 +7,8 @@ export const HOST_WAKE_REFUSAL_CODES = [
   'wake_device_unknown',
   'wake_grant_missing',
   'wake_target_unknown',
+  // Why: the phone named a host the target is no longer bound to; the broker sent nothing (WR-03).
+  'wake_target_rebound',
   'wake_send_failed',
   'wake_unknown',
   'wake_broker_state_indeterminate',

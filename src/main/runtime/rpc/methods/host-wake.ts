@@ -1,12 +1,14 @@
 import { z } from 'zod'
 import { defineMethod, type RpcContext, type RpcMethod } from '../core'
-import { hostWakeRefusal } from '../../../../shared/host-wake'
+import { HOST_KEY_FORM, hostWakeRefusal } from '../../../../shared/host-wake'
 import { wakeBrokerHost } from '../../wake-broker-host'
 import type { WakeBroker, WakeCaller } from '../../wake-broker'
 
 const WakeRequestParams = z.object({
   targetId: z.string().min(1).max(64),
-  requestId: z.string().min(8).max(128)
+  requestId: z.string().min(8).max(128),
+  // Why optional: additive; an old broker strips it (z.object drops unknown keys) and wakes as before (WR-03).
+  hostKey: z.string().regex(HOST_KEY_FORM).optional()
 })
 
 const WakeStatusParams = z.object({
@@ -45,7 +47,8 @@ export const HOST_WAKE_METHODS: RpcMethod[] = [
       enabledBroker().request({
         ...wakeCaller(ctx),
         targetId: params.targetId,
-        requestId: params.requestId
+        requestId: params.requestId,
+        ...(params.hostKey !== undefined ? { hostKey: params.hostKey } : {})
       })
   }),
   defineMethod({

@@ -67,9 +67,12 @@ export type WakeBrokerDeps = {
 
 export type WakeCaller = { token: string | undefined; deviceId: string | undefined }
 
+// Why optional: an old phone sends no key and keeps today's behaviour; a new one names the host it routed for.
+export type WakeRequestCaller = WakeCaller & { hostKey?: string }
+
 export type WakeBroker = {
   request(
-    args: WakeCaller & { targetId: string; requestId: string }
+    args: WakeRequestCaller & { targetId: string; requestId: string }
   ): Promise<HostWakeRequestResult>
   status(args: WakeCaller & { wakeId: string }): HostWakeStatusResult
   targetsFor(args: WakeCaller): { targets: HostWakeTargetSummary[] }
@@ -163,6 +166,18 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     return target
   }
 
+  // Why: the key a phone sent is the host it believes this target wakes; a rebind since then must not wake another (WR-03).
+  function judgeBinding(caller: WakeRequestCaller, targetId: string): WakeTarget {
+    const target = judge(caller, targetId)
+    if (caller.hostKey !== undefined && target.hostKey !== caller.hostKey) {
+      throw hostWakeRefusal(
+        'wake_target_rebound',
+        'That wake target is no longer bound to the host this device named.'
+      )
+    }
+    return target
+  }
+
   function record(entry: WakeRecord, stage: HostWakeStageRecord['stage'], code?: string): void {
     entry.stages.push({
       stage,
@@ -177,7 +192,7 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
   }
 
   async function sendWake(
-    caller: WakeCaller,
+    caller: WakeRequestCaller,
     target: WakeTarget,
     entry: WakeRecord
   ): Promise<void> {
@@ -185,7 +200,7 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     record(entry, 'authorized')
     try {
       // Why: the effect moment re-judges, so a device revoked since the first check sends nothing (D-08).
-      judge(caller, target.targetId)
+      judgeBinding(caller, target.targetId)
     } catch (error) {
       if (error instanceof HostWakeRefusal) {
         // Why an existing terminal stage: other granted devices must see this wake end, and old clients only know these stages.
@@ -214,7 +229,7 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     record(entry, 'packet-sent')
   }
 
-  function start(caller: WakeCaller, target: WakeTarget): Promise<WakeOutcome> {
+  function start(caller: WakeRequestCaller, target: WakeTarget): Promise<WakeOutcome> {
     const entry: WakeRecord = {
       wakeId: deps.newWakeId(),
       targetId: target.targetId,
@@ -235,7 +250,7 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     return done.then((sent) => ({ entry: sent, adopted: false }))
   }
 
-  function startOrAdopt(caller: WakeCaller, target: WakeTarget): Promise<WakeOutcome> {
+  function startOrAdopt(caller: WakeRequestCaller, target: WakeTarget): Promise<WakeOutcome> {
     const inFlight = adoptable.get(target.targetId)
     if (!inFlight) {
       return start(caller, target)
@@ -260,7 +275,7 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     async request(args) {
       prune()
       // Why authority first: a revoked or ungranted device never receives a replay (T-19-07).
-      const target = judge(args, args.targetId)
+      const target = judgeBinding(args, args.targetId)
       const replayKey = `${target.targetId}\u0000${args.requestId}`
       const prior = replays.get(replayKey)
       if (prior) {

@@ -55,6 +55,7 @@ export const HOST_CARD_LABELS = {
   'wake.wake_device_unknown': 'Wake refused: device unknown to broker',
   'wake.wake_grant_missing': 'Wake refused: no grant',
   'wake.wake_target_unknown': 'Wake refused: target unknown',
+  'wake.wake_target_rebound': 'Wake refused: target bound to another host',
   'wake.wake_send_failed': 'Wake refused: send failed',
   'wake.wake_unknown': 'Wake record expired or unknown',
   'wake.wake_broker_state_indeterminate': 'Wake refused: broker state unconfirmed',
@@ -235,6 +236,7 @@ const WAKE_REFUSAL_LABEL: Record<PhoneWakeRefusalCode, HostCardLabelId> = {
   wake_device_unknown: 'wake.wake_device_unknown',
   wake_grant_missing: 'wake.wake_grant_missing',
   wake_target_unknown: 'wake.wake_target_unknown',
+  wake_target_rebound: 'wake.wake_target_rebound',
   wake_send_failed: 'wake.wake_send_failed',
   wake_unknown: 'wake.wake_unknown',
   wake_broker_state_indeterminate: 'wake.wake_broker_state_indeterminate'
