@@ -283,6 +283,22 @@ describe('orca wake refuses the SSH relay bridge and remote retargeting', () => 
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['WSL bridge', '\\\\wsl.localhost\\Ubuntu\\home\\owner\\repo'],
+    ['WSL bridge in /mnt/c', 'C:\\Users\\owner\\repo'],
+    ['SSH relay', '/home/owner/repo']
+  ])(
+    'refuses a %s caller without claiming an SSH session it cannot prove (IN-02)',
+    async (_caller, cwd) => {
+      const refusal = createWakeHandlers({ ORCA_CLI_CWD: cwd })['wake grant list'](context([]))
+      await expect(refusal).rejects.toMatchObject({ code: 'remote_invocation_refused' })
+      const { message } = await refusal.catch((error: Error) => error)
+      expect(message).toContain('remote or bridged shell (SSH relay or WSL)')
+      expect(message).not.toContain('not through a remote SSH session')
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('still reaches the runtime with an empty ORCA_CLI_CWD (positive control)', async () => {
     callMock.mockResolvedValue(success({ grants: [] }))
     await createWakeHandlers({ ORCA_CLI_CWD: '' })['wake grant list'](context([]))
