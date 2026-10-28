@@ -189,5 +189,5 @@ Plans:
 - [x] 21-02-PLAN.md — shared route composer `composeHostWakeRoute` (one bound broker from this session's answers, `ambiguous_broker` refused, nothing persisted) + phone-side hostKey derivation proven equal to the host fingerprint, pinned vector (wave 2)
 - [x] 21-03-PLAN.md — claims gate first: per-control effect-wording scope replaces the card-wide short-circuit, `wake` label family and observer rule (target-only host-announced/runtime-ready) in a sibling .mjs, `wakeModel` (wave 2)
 - [x] 21-04-PLAN.md — `host-card-wake` Pressable (sibling, no confirm) + 19 `wake.*` labels and `presentHostCardWake` (phone-rebased stages, closed refusal table), jsonc classification, success line 41/3 pinned with notes; GEX44 render tests (wave 3)
-- [ ] 21-05-PLAN.md — per-session broker answers, press to the routed broker with a fresh requestId, focus re-reads (no timer), refusals outside the revocation latch, index.tsx wiring; GEX44 full run (wave 4)
+- [x] 21-05-PLAN.md — per-session broker answers, press to the routed broker with a fresh requestId, focus re-reads (no timer), refusals outside the revocation latch, index.tsx wiring; GEX44 full run (wave 4)
 - [ ] 21-06-PLAN.md — seven mutants (scope x2, rpc, Woken, no-binding x2, ambiguous), 21-VERIFICATION.md human_needed (phone leg owed, OWNER_BOUND b/c), STATE.md row 21 (wave 5)
