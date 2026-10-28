@@ -92,6 +92,11 @@ function openPhonePeer(args: PhonePeerArgs) {
         return
       }
       state = 'e2ee-ready'
+      // Why restart here: the 2000 ms bound is the handshake's, counted from the splice, not the host leg's attach.
+      if (timer) {
+        clearTimeout(timer)
+      }
+      timer = setTimeout(() => settle('timeout'), READY_TIMEOUT_MS)
       socket.send(JSON.stringify(peer.hello))
       return
     }
@@ -105,8 +110,8 @@ function openPhonePeer(args: PhonePeerArgs) {
   }
 
   socket.once('open', () => {
-    // Why from open: the 2000 ms bound is the handshake's, not the loopback connect's under load.
-    timer = setTimeout(() => settle('timeout'), READY_TIMEOUT_MS)
+    // Why the attach deadline: relay-hello waits on the host leg, which the host itself bounds by ATTACH_DEADLINE_MS.
+    timer = setTimeout(() => settle('timeout'), ATTACH_DEADLINE_MS)
     socket.send(
       JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: args.credential })
     )
