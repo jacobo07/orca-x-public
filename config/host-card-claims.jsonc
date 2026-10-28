@@ -96,12 +96,12 @@
     "capability.can-wake-lan": {
       "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
       "evidence": [],
-      "why": "Naming LAN wake is not offering it: the card has no wake control, only the announced value"
+      "why": "Naming LAN wake is not offering it: the Wake control is offered only from a bound broker's answer this session, never from this announced value"
     },
     "capability.can-wake-remote": {
       "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
       "evidence": [],
-      "why": "Naming remote wake is not offering it: the card has no wake control, only the announced value"
+      "why": "Naming remote wake is not offering it: the Wake control is offered only from a bound broker's answer this session, never from this announced value"
     },
     "capability.can-power-on-oob": {
       "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
@@ -151,12 +151,131 @@
       "producer": "src/shared/host-availability.ts#unknownHostCapabilities",
       "evidence": [],
       "why": "With no status this session, or every capability unknown, one line says so instead of six guesses"
+    },
+    "wake.requested": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker answered that it recorded the request; that is the broker's word, not the host's"
+    },
+    "wake.authorized": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker answered that this paired device holds a grant for the target; nothing reached the host yet"
+    },
+    "wake.packet-sent": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker answered that its socket sent the magic packet; a packet sent is not a host woken"
+    },
+    "wake.packet-send-failed": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker answered that its send failed, so the card says the packet did not leave rather than guessing"
+    },
+    "wake.host-announced": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "target",
+      "why": "Only the target's own status answer, on a connection made after the press and observed after the press reply, says the host answered"
+    },
+    "wake.runtime-ready": {
+      "producer": "src/shared/host-wake.ts#composeWakeProgress",
+      "evidence": ["live-response"],
+      "observer": "target",
+      "why": "Only the target's own status answer after the press reply, with a ready graph, says its Orca runtime is ready"
+    },
+    "wake.wake_broker_disabled": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because its Owner has not enabled wake brokering; that is its answer, shown as its own state"
+    },
+    "wake.wake_broker_unavailable": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because its wake store could not serve the request; the target's state is not implied"
+    },
+    "wake.wake_device_required": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused a caller that is not a paired device; only a paired phone may ask"
+    },
+    "wake.wake_device_revoked": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because this phone's pairing was revoked; re-pairing is the fix, not a retry"
+    },
+    "wake.wake_device_unauthorized": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because the device token and the device do not belong together"
+    },
+    "wake.wake_device_unknown": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because it does not know this device at all"
+    },
+    "wake.wake_grant_missing": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because this device holds no grant for the bound target; the Owner grants it"
+    },
+    "wake.wake_target_unknown": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because the target id is no longer in its store, so the binding is stale"
+    },
+    "wake.wake_send_failed": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused after its send path failed; distinct from a recorded packet-send-failed stage"
+    },
+    "wake.wake_unknown": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker answered that it holds no record for this wake id, which is its answer and not a state of the host"
+    },
+    "wake.wake_broker_state_indeterminate": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_REFUSAL_CODES",
+      "evidence": ["live-response"],
+      "observer": "broker",
+      "why": "The broker refused because it could not confirm its own state, so it sent nothing rather than risk a duplicate"
+    },
+    "wake.unknown": {
+      "producer": "src/shared/host-wake.ts#HOST_WAKE_CARD_STATES",
+      "evidence": [],
+      "observer": "phone",
+      "why": "An unreadable broker answer or an unlisted refusal code is unknown; the phone never maps it to a nearby state"
+    },
+    "wake.ambiguous-broker": {
+      "producer": "src/shared/host-wake-proxy.ts#composeHostWakeRoute",
+      "evidence": ["live-response"],
+      "observer": "phone",
+      "why": "Two brokers answered this session with a binding for this host, so the phone refuses to guess and draws no control"
     }
   },
   "actions": {
     "host-card-open": {
       "kind": "navigation",
       "why": "Opens the host screen on the phone and sends no host effect"
+    },
+    "host-card-wake": {
+      "kind": "effect",
+      "rpc": "host.wake.request",
+      "why": "Asks the one broker that answered this session with a binding for this host's key to send the magic packet; drawn only from that answer"
     },
     "host-card-actions": {
       "kind": "navigation",

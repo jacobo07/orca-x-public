@@ -553,6 +553,10 @@ describe('host-card-effect-claims: wakeModel (G7 non-vacuity)', () => {
     delete config.wakeModel
     const { code, errors } = await runMain(JSON.stringify(config))
     expect(code).toBe(1)
-    expect(errors.filter((line) => /wakeModel/.test(line))).toHaveLength(1)
+    // Why two: since 21-04 the card has wake labels, so G7 non-vacuity names wakeModel as well.
+    expect(errors.filter((line) => /wakeModel/.test(line))).toEqual([
+      expect.stringMatching(/19 wake label\(s\) but no wake vocabulary .*set wakeModel/),
+      expect.stringMatching(/wakeModel is missing from the config/)
+    ])
   })
 })

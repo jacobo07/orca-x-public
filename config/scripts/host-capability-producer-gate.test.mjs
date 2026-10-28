@@ -91,7 +91,7 @@ describe('G6 capability producers', () => {
     expect(errors).toEqual([])
     expect(code).toBe(0)
     expect(logged).toEqual([
-      `check-host-card-claims: 22 labels classified, 2 controls classified, ${realRpcCount()} host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
+      `check-host-card-claims: 41 labels classified, 3 controls classified, ${realRpcCount()} host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
     ])
   })
 

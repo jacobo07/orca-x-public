@@ -9,9 +9,20 @@ import {
   type HostPowerState,
   type HostStatusObservation
 } from '../../../src/shared/host-availability'
+import {
+  composeWakeProgress,
+  type HostWakeRefusalCode,
+  type HostWakeStageRecord
+} from '../../../src/shared/host-wake'
+import { composeHostWakeRoute, type WakeRouteBroker } from '../../../src/shared/host-wake-proxy'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import { evaluateCompat } from '../transport/protocol-compat'
+import {
+  furthestWakeStage,
+  rebaseBrokerStages,
+  targetAnswerAfterPress
+} from './host-card-wake-stage'
 
 // The only availability copy the host card can show. A state without a key renders its family's
 // unknown label; a key is added only together with a producer that can prove the state.
@@ -37,7 +48,26 @@ export const HOST_CARD_LABELS = {
   'capability-value.not-configured': 'not set up',
   'capability-value.needs-owner-setup': 'needs setup',
   'capability-value.unknown': 'unknown',
-  'capabilities.unknown': 'Capabilities unknown'
+  'capabilities.unknown': 'Capabilities unknown',
+  'wake.requested': 'Wake requested',
+  'wake.authorized': 'Wake authorized',
+  'wake.packet-sent': 'Wake packet sent',
+  'wake.packet-send-failed': 'Wake packet not sent',
+  'wake.host-announced': 'Host answered after wake',
+  'wake.runtime-ready': 'Orca runtime ready after wake',
+  'wake.wake_broker_disabled': 'Wake refused: broker not enabled',
+  'wake.wake_broker_unavailable': 'Wake refused: broker unavailable',
+  'wake.wake_device_required': 'Wake refused: paired device required',
+  'wake.wake_device_revoked': 'Wake refused: device revoked',
+  'wake.wake_device_unauthorized': 'Wake refused: device not authorized',
+  'wake.wake_device_unknown': 'Wake refused: device unknown to broker',
+  'wake.wake_grant_missing': 'Wake refused: no grant',
+  'wake.wake_target_unknown': 'Wake refused: target unknown',
+  'wake.wake_send_failed': 'Wake refused: send failed',
+  'wake.wake_unknown': 'Wake record expired or unknown',
+  'wake.wake_broker_state_indeterminate': 'Wake refused: broker state unconfirmed',
+  'wake.unknown': 'Wake status unknown',
+  'wake.ambiguous-broker': 'Wake unavailable: ambiguous broker'
 } as const
 
 export type HostCardLabelId = keyof typeof HOST_CARD_LABELS
@@ -160,5 +190,132 @@ export function presentHostCardAvailability(input: {
     accessibilityText: spoken.join(', '),
     tone,
     labelIds
+  }
+}
+
+// All times are the phone's clock; brokerStages is the broker's answer as received.
+export type HostCardWakeAttempt = {
+  brokerHostId: string
+  targetId: string
+  requestId: string
+  pressedAt: number
+  repliedAt: number | null
+  wakeId: string | null
+  brokerStages: unknown
+  refusalCode: string | null
+}
+
+export type HostCardWakeInputs = {
+  hostKey: string | null
+  brokers: readonly WakeRouteBroker[]
+  attempt: HostCardWakeAttempt | null
+}
+
+export type HostCardWakeProjection = {
+  showControl: boolean
+  busy: boolean
+  stageLabelId: HostCardLabelId | null
+  stageText: string | null
+  tone: HostCardTone
+}
+
+const WAKE_STAGE_LABEL: Record<HostWakeStageRecord['stage'], HostCardLabelId> = {
+  requested: 'wake.requested',
+  authorized: 'wake.authorized',
+  'packet-sent': 'wake.packet-sent',
+  'packet-send-failed': 'wake.packet-send-failed',
+  'host-announced': 'wake.host-announced',
+  'runtime-ready': 'wake.runtime-ready'
+}
+
+// Why not host_key_unavailable: it is the Owner CLI's passthrough, never a phone wake refusal.
+type PhoneWakeRefusalCode = Exclude<HostWakeRefusalCode, 'host_key_unavailable'>
+
+// Why a closed map: a code the shared table gains fails tsc here until it has its own label.
+const WAKE_REFUSAL_LABEL: Record<PhoneWakeRefusalCode, HostCardLabelId> = {
+  wake_broker_disabled: 'wake.wake_broker_disabled',
+  wake_broker_unavailable: 'wake.wake_broker_unavailable',
+  wake_device_required: 'wake.wake_device_required',
+  wake_device_revoked: 'wake.wake_device_revoked',
+  wake_device_unauthorized: 'wake.wake_device_unauthorized',
+  wake_device_unknown: 'wake.wake_device_unknown',
+  wake_grant_missing: 'wake.wake_grant_missing',
+  wake_target_unknown: 'wake.wake_target_unknown',
+  wake_send_failed: 'wake.wake_send_failed',
+  wake_unknown: 'wake.wake_unknown',
+  wake_broker_state_indeterminate: 'wake.wake_broker_state_indeterminate'
+}
+
+const WAKE_WARNING_LABELS: ReadonlySet<HostCardLabelId> = new Set<HostCardLabelId>([
+  'wake.packet-send-failed',
+  'wake.ambiguous-broker',
+  ...Object.values(WAKE_REFUSAL_LABEL)
+])
+
+function isPhoneWakeRefusalCode(code: string): code is PhoneWakeRefusalCode {
+  return Object.hasOwn(WAKE_REFUSAL_LABEL, code)
+}
+
+function refusalLabelId(code: string): HostCardLabelId {
+  return isPhoneWakeRefusalCode(code) ? WAKE_REFUSAL_LABEL[code] : 'wake.unknown'
+}
+
+function wakeTone(id: HostCardLabelId | null): HostCardTone {
+  if (id === 'wake.host-announced' || id === 'wake.runtime-ready') {
+    return 'normal'
+  }
+  return id !== null && WAKE_WARNING_LABELS.has(id) ? 'warning' : 'muted'
+}
+
+function attemptStageLabelId(
+  attempt: HostCardWakeAttempt,
+  snapshot: HomeHostStatusSnapshot | undefined,
+  lastConnectedAt: number | null
+): HostCardLabelId | null {
+  const { repliedAt } = attempt
+  if (repliedAt === null) {
+    return null
+  }
+  if (attempt.refusalCode !== null) {
+    return refusalLabelId(attempt.refusalCode)
+  }
+  const progress = composeWakeProgress(
+    rebaseBrokerStages(attempt.brokerStages, repliedAt),
+    targetAnswerAfterPress({ pressedAt: attempt.pressedAt, repliedAt, snapshot, lastConnectedAt })
+  )
+  const stage = furthestWakeStage(progress)
+  return stage === null ? 'wake.unknown' : WAKE_STAGE_LABEL[stage]
+}
+
+// Why: the shared route decides whether a control exists; a packet sent is never a host woken (D-05, D-06).
+export function presentHostCardWake(input: {
+  targetHostId: string
+  wake: HostCardWakeInputs | undefined
+  powerAwake: boolean
+  targetSnapshot: HomeHostStatusSnapshot | undefined
+  targetLastConnectedAt: number | null
+}): HostCardWakeProjection {
+  const { wake } = input
+  if (wake === undefined) {
+    return { showControl: false, busy: false, stageLabelId: null, stageText: null, tone: 'muted' }
+  }
+  const route = composeHostWakeRoute({
+    targetHostId: input.targetHostId,
+    hostKey: wake.hostKey,
+    brokers: wake.brokers
+  })
+  const { attempt } = wake
+  const stageLabelId: HostCardLabelId | null =
+    attempt !== null
+      ? attemptStageLabelId(attempt, input.targetSnapshot, input.targetLastConnectedAt)
+      : !route.send && route.reason === 'ambiguous_broker'
+        ? 'wake.ambiguous-broker'
+        : null
+  return {
+    showControl: route.send && !input.powerAwake,
+    busy: attempt !== null && attempt.repliedAt === null,
+    stageLabelId,
+    stageText: stageLabelId === null ? null : HOST_CARD_LABELS[stageLabelId],
+    tone: wakeTone(stageLabelId)
   }
 }
