@@ -25883,6 +25883,61 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it.each([
+    ['idle Claude auto-title', '✳ Prueba sintetica de Orca X'],
+    ['glyph-less topic title', 'Prueba sintetica de Orca X']
+  ])(
+    'keeps the hook session on a worked pane whose title becomes the %s',
+    async (_label, idleTitle) => {
+      // Phase 19: a phone-started Claude tab showed no turns; the phone subscribes only once
+      // agentStatus carries providerSession.
+      const paneKey = makePaneKey('phone-tab', HEADLESS_LEAF_ID)
+      const providerSession = {
+        key: 'session_id' as const,
+        id: '5e0c3f1a-9b7d-4c2e-8a61-0d4f2b9e7c13',
+        transcriptPath: '/transcripts/5e0c3f1a.jsonl'
+      }
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey,
+            state: 'done',
+            prompt: 'ORCA-NONCE-19',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: Date.now(),
+            stateStartedAt: Date.now(),
+            tabId: 'phone-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            providerSession
+          }
+        ]
+      })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-phone' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'phone-tab',
+        leafId: HEADLESS_LEAF_ID,
+        title: 'Terminal'
+      })
+      runtime.onPtyData('pty-phone', '\x1b]0;⠂ Claude Code\x07', 100)
+      runtime.onPtyData('pty-phone', `\x1b]0;${idleTitle}\x07`, 200)
+
+      const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(result.tabs[0]).toEqual(
+        expect.objectContaining({
+          type: 'terminal',
+          agentStatus: expect.objectContaining({ providerSession })
+        })
+      )
+    }
+  )
+
   it('reads a resume-identity-only row the live-agent snapshot filters out', async () => {
     // Pi publishes its session separately from status, and the shared getter drops
     // those rows so they can't read as running agents — leaving native chat with no

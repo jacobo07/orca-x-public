@@ -40,6 +40,7 @@ describe('useMobileNativeChatMessageSend', () => {
   const onCommandSend = vi.fn()
   const commandSendRef = { current: onCommandSend }
   const agentRef = { current: null as string | null }
+  const handleRef = { current: 'term' as string | null }
   let onSendError = vi.fn()
 
   const mount = (
@@ -51,7 +52,7 @@ describe('useMobileNativeChatMessageSend', () => {
       api = useMobileNativeChatMessageSend({
         client: { sendRequest: vi.fn() } as never,
         enabled: true,
-        handleRef: { current: 'term' },
+        handleRef,
         deviceTokenRef: { current: 'device' },
         agentRef,
         commandSendRef,
@@ -93,6 +94,7 @@ describe('useMobileNativeChatMessageSend', () => {
     onCommandSend.mockReset()
     commandSendRef.current = onCommandSend
     onSendError = vi.fn()
+    handleRef.current = 'term'
     resetMobileNativeChatTerminalWritesForTests()
   })
   afterEach(() => {
@@ -134,6 +136,46 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     expect(result).toBe(false)
     expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('keeps a send on the terminal it started on when the user switches tabs mid-flight', async () => {
+    clearInputWrite.mockImplementation(async () => {
+      handleRef.current = 'other-terminal'
+      return true
+    })
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(clearArgs()).toMatchObject({ terminal: 'term' })
+    expect(sendWithOutcome.mock.calls[0]![0]).toMatchObject({ terminal: 'term' })
+  })
+
+  it('names the host refusal instead of a bare failure, and draws no bubble', async () => {
+    sendWithOutcome.mockImplementation(async (args: { onRefused?: (code: string) => void }) => {
+      args.onRefused?.('mobile_input_floor_unavailable')
+      return 'rejected'
+    })
+    mount(() => null)
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith(
+      'Not sent: the phone lost control of this terminal. Reopen it, then send again'
+    )
+  })
+
+  it('names the refusal of a rejected launch-draft clear', async () => {
+    clearInputWrite.mockImplementation(async (args: { onRefused?: (code: string) => void }) => {
+      args.onRefused?.('terminal_handle_stale')
+      return false
+    })
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(onSendError).toHaveBeenCalledWith('Not sent: this terminal closed on the desktop')
   })
 
   it('drops the body write\u2019s own Ctrl+U prefix once the dedicated clear ran', async () => {
@@ -380,5 +422,30 @@ describe('useMobileNativeChatMessageSend', () => {
     // The answer released its own hold on the way out.
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     releaseMobileNativeChatTerminalWrite('term')
+  })
+
+  // SEND-P0b phase 17: a typed long multi-paragraph body lost its beginning; a paste arrives whole.
+  const asAgentPrompt = (): unknown =>
+    (sendWithOutcome.mock.calls[0]![0] as { asAgentPrompt?: boolean }).asAgentPrompt
+
+  it('sends a composer chat turn as an agent prompt (one paste)', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('Paragraph one.\n\nParagraph two.')
+    })
+    expect(asAgentPrompt()).toBe(true)
+  })
+
+  it('keeps question answers and slash commands as typed keys', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.answerQuestion('1')
+    })
+    expect(asAgentPrompt()).toBe(false)
+    sendWithOutcome.mockClear()
+    await act(async () => {
+      await api!.send('/model sonnet')
+    })
+    expect(asAgentPrompt()).toBe(false)
   })
 })

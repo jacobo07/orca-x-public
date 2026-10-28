@@ -66,7 +66,9 @@ function build(
 
 describe('buildMobileNativeChatTransientData', () => {
   it('appends pending optimistic messages at the tail as user turns', () => {
-    const data = build([assistant('a1', 'hello')], null, [{ id: 'p1', text: 'queued' }])
+    const data = build([assistant('a1', 'hello')], null, [
+      { id: 'p1', delivery: 'written', text: 'queued' }
+    ])
     const last = data[data.length - 1]
     expect(last.id).toBe('p1')
     expect(last.role).toBe('user')
@@ -75,7 +77,7 @@ describe('buildMobileNativeChatTransientData', () => {
 
   it('renders a pending send with images as text followed by image-ref thumbnails', () => {
     const data = build([], null, [
-      { id: 'p1', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }
+      { id: 'p1', delivery: 'written', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }
     ])
     const last = data[data.length - 1]
     expect(last.role).toBe('user')
@@ -87,7 +89,9 @@ describe('buildMobileNativeChatTransientData', () => {
   })
 
   it('renders an image-only pending send (no text) as just the thumbnail', () => {
-    const data = build([], null, [{ id: 'p1', text: '', images: ['file:///a.jpg'] }])
+    const data = build([], null, [
+      { id: 'p1', delivery: 'written', text: '', images: ['file:///a.jpg'] }
+    ])
     expect(data[data.length - 1].blocks).toEqual([{ type: 'image-ref', url: 'file:///a.jpg' }])
   })
 
@@ -163,7 +167,9 @@ describe('buildMobileNativeChatTransientData', () => {
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {
     // Whether text streams at all is the gate's call
     // (`mobile-native-chat-streaming-gate.test.ts`); this only places it.
-    const data = build([user('u1', 'hi')], 'thinking out loud', [{ id: 'p1', text: 'queued' }])
+    const data = build([user('u1', 'hi')], 'thinking out loud', [
+      { id: 'p1', delivery: 'written', text: 'queued' }
+    ])
     expect(data.map((message) => message.id)).toEqual(['u1', 'streaming', 'p1'])
     expect(data[1].blocks).toEqual([{ type: 'text', text: 'thinking out loud' }])
   })

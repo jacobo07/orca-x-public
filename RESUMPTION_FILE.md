@@ -1,33 +1,41 @@
-# RESUMPTION — Orca Cognitive Workspace, long run (remote-project-agent / provider-resume)
+# RESUMPTION: Orca X phone control, SEND-P0 (mobile chat send)
+
+The previous content (the cognitive-workspace program in another worktree) is in git at 7bf794481.
 
 ## 1. Identity
+Worktree `C:\owx-pc`, branch `mobile/phone-control`, mission m-aae9a9c1405c. GSD state is in
+`.planning/STATE.md` and `.planning/ROADMAP.md` (both tracked). The brief and laws are in `.planning/SEND-P0-PLAN.md`.
+Thesis: a phone chat message is delivered only when the agent's transcript shows the turn. A PTY write
+receipt is not delivery.
 
-Worktree **`C:\Users\User\Apps\orca-cogws-wt`**, branch **`orca-x/cognitive-workspace`** (unpushed).
-A `/clear`'d pane has SIX times opened the Desktop checkout instead — prove `git worktree list` first.
-Roadmap `.planning/ROADMAP.md` + `.planning/STATE.md` (git-excluded). Spec
-`docs/orca-cognitive-workspace-spec.md`; authority/outcomes reference
-`docs/reference/remote-agent-turn-authority.md`.
-
-## 2. Exact state (2026-09-24) — PROGRAM COMPLETE
-
-`node config/scripts/check-cognitive-workspace-completeness.mjs` → **exit 0**: 18 complete / 0 open /
-2 blocked (Q owner-auth, T runner-capacity), 50/50 evidence pointers, every complete row's gate run.
-Phases 1–9 sealed; per-phase `NN-VERIFICATION.md` under `.planning/phases/`. Last drill: 30/30 on
-GEX44 at `6afec4fd0`.
+## 2. Exact state (2026-10-27 ~19:00, worker epoch 3)
+Phases 13, 14 and 15 are sealed (`.planning/phases/13-*`, `14-*`, `15-*`, each with a VERIFICATION.md).
+- Root cause: Ctrl+U bundled with a paste-sized body (>=94 chars) left Claude Code unsubmitted.
+- Fix 4e00f6e22: the clear goes out as its own write. Evidence bubble a07d1d195: 'written', then
+  'unconfirmed' after 20 s. Refusal reasons 3e454579f.
+Phase 16 status table: `.planning/phases/16-send-p0-product-reality-and-close/16-STATUS.md`.
+- Done: 13 mutants (16-MUTANTS.md), KV lesson, ratchet gate `pnpm check:mobile-remote-effect-bubbles` (49038b8db).
+- Coherence anchor: `git log --oneline -1` shows 49038b8db or later.
+- Fresh-agent test (3d) PASS 7/7. Push state: origin/mobile/phone-control = c4679d615; SEND-P0 commits are local only.
+- OWNER_BOUND: device legs (criterion 1). UKDL stays candidates-only until then.
+Phases 5, 7 and 9 are deferred-human (do not rework them).
 
 ## 3. Active decisions
+- Fix shape (a), the phone-side split, not the host agent-prompt path. There is no wire change.
+- There is no Retry on an unconfirmed bubble, so no duplicate turns.
+- GitHub/Linear comment rows in tasks.tsx are receipt-backed (built after the provider create succeeded), so they
+  sit in `config/mobile-remote-effect-receipt-baseline.txt`, not on the chat presenter.
+- Never push: STATE.md laws make pushing Owner-only. Heavy tests run on GEX44 in `/tmp/orca-phone-p*`, torn down afterwards.
 
-- Conversation on the desktop; provider effect on the ssh host via relay `agentProcess.*`.
-- A location is a path AND a host; provenance carries `executionHostId`, `cwd`, `hostAddress`.
-- Resume relocates only on Codex ≥ 0.153.4 whose own answer confirms the directory.
-
-## 4. Next three actions (all owner-gated)
-
-1. After 2026-09-27 19:54 (Codex quota): `.planning/tools/gex44-e2e.ps1 -Sha <HEAD> -Phase build`, then
-   `-Phase test -SignedIn`; the answer must contain 4471 → flip matrix Q to complete.
-2. When a GitHub runner is assigned (runner_id > 0) → flip matrix T.
-3. Push the branch / open the PR only on the Owner's word.
+## 4. Next three actions
+Update (phases 17 and 18 sealed, HEAD ae84e3d1b): APK 97b783068 (sha256 93782b3e…afe3) is INSTALLED on the S25 Ultra and replaces the APK
+named in item 2. The device leg is still OWNER_BOUND: in a live Claude tab on Host 1, (a) a long multi-paragraph message must arrive whole;
+(b) a repeated `hola?` must not get a false "Agent has not shown this message". See STATE.md Current Position, "OWNER DECISION NEEDED".
+1. (Done: fresh-agent test PASS.) Nothing deterministic remains in phase 16; do not invent work.
+2. Device legs, OWNER_BOUND: the APK is BUILT and staged at `C:\Users\Jacobo\Downloads\orca-x-send-p0-854f34c01.apk`
+   (sha256 cc738f6b…262c, 16-STATUS row 1). The Owner moves it to the S25 Ultra and installs it, then run the >=94-char Agent send with a nonce, terminal send fresh output, send+scroll, send+lease.
+3. After the device leg passes: promote the UKDL candidates from the KV note and close phase 16 (VERIFICATION.md).
 
 ## 5. Start
-
-Read `.planning/STATE.md`, prove the worktree, run the done-gate above.
+Run `git status --short; git log --oneline -5`, read `.planning/STATE.md` Current Position, then do the first
+action that is not done.

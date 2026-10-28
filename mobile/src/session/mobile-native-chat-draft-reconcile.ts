@@ -36,6 +36,52 @@ export function countUserTextOccurrences(
   return count
 }
 
+/** User turns equal to `text` strictly after `tailId`; the whole window when `tailId` is null
+ *  (the transcript was empty at send time). null when the tail is no longer in the window, so
+ *  the caller can tell "no echo" from "cannot place the echo". */
+export function countUserTextOccurrencesAfter(
+  messages: readonly NativeChatMessage[],
+  tailId: string | null,
+  text: string
+): number | null {
+  const tailIndex = tailId ? messages.findIndex((message) => message.id === tailId) : -1
+  if (tailId && tailIndex === -1) {
+    return null
+  }
+  let count = 0
+  for (let i = tailIndex + 1; i < messages.length; i++) {
+    const message = messages[i]
+    if (message && normalizedUserText(message) === text) {
+      count++
+    }
+  }
+  return count
+}
+
+/** Whether an accepted text send's transcript echo is present. Placed after the send's tail
+ *  whenever the tail is still in the window: the window slides (live frames trim its head) and
+ *  grows (paged history), so an absolute count can miss a real echo or take an old turn for one.
+ *  Absolute count only when the tail itself has left the window. */
+export function hasPendingTextEchoLanded(
+  messages: readonly NativeChatMessage[],
+  item: {
+    text: string
+    expectedOccurrence: number
+    echoOrdinalAfterTail?: number
+    baselineTailMessageId: string | null
+  },
+  landedCounts: ReadonlyMap<string, number>
+): boolean {
+  const text = normalizeNativeChatUserText(item.text)
+  const afterTail =
+    item.echoOrdinalAfterTail === undefined
+      ? null
+      : countUserTextOccurrencesAfter(messages, item.baselineTailMessageId, text)
+  return afterTail !== null
+    ? afterTail >= item.echoOrdinalAfterTail!
+    : (landedCounts.get(text) ?? 0) >= item.expectedOccurrence
+}
+
 /** Number of `[Image: source: …]` echo turns strictly after `tailId` (or the
  *  whole transcript when the tail was paginated out). An image-only send has no
  *  caption to match, so it reconciles by ordinal against this count — counting

@@ -1,0 +1,9 @@
+# Mobile files that mint a stand-in row only AFTER the host returned the created object's own
+# success (isSuccess + result.ok !== false). The row restates a confirmed effect, not a write receipt.
+# Anything else that mints a pending/optimistic row must take its state from
+# mobile/src/session/mobile-native-chat-delivery-evidence.ts. This list only shrinks.
+# Enforced by config/scripts/check-mobile-remote-effect-bubbles.mjs (pnpm check:mobile-remote-effect-bubbles).
+#
+# GitHub/Linear comment and reply creates: the fallback `local-${Date.now()}` id is used only when
+# the provider's create succeeded but returned no comment object.
+mobile/app/h/[hostId]/tasks.tsx

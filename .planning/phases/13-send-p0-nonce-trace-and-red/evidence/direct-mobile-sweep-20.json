@@ -1,0 +1,31 @@
+{
+  "scenario": "mobile",
+  "bodyLength": 54,
+  "nonce": "ORCA-NONCE-bb05264c",
+  "submitGapMs": 501,
+  "admitted": true,
+  "requestUrls": ["/v1/messages?beta=true [NONCE]", "/v1/messages?beta=true [NONCE]"],
+  "linesWithNonce": ["❯ Reply with ok. ORCA-NONCE-bb05264c the phone asks the"],
+  "readyTail": [
+    "▎ https://code.claude.com/docs/en/permission-modes",
+    "                                                                                                    ◐ medium · /effort  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "❯  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
+  ],
+  "afterTail": [
+    " ▝▝   ▝▝   ~\\AppData\\Local\\Temp\\sendp0-h1-qMHGm1\\work",
+    "▎ Auto mode is now Claude Code's default permission mode.",
+    "▎ Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and     ",
+    "▎ prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.",
+    "▎ https://code.claude.com/docs/en/permission-modes",
+    "❯ Reply with ok. ORCA-NONCE-bb05264c the phone asks the",
+    "● ok",
+    "✻ Brewed for 0s · done 3:49 PM",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "❯  ",
+    "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) "
+  ]
+}
