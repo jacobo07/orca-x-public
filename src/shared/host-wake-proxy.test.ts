@@ -3,9 +3,12 @@ import { HOST_CONNECTIVITY_STATES } from './host-availability'
 import { composeWakeProgress } from './host-wake'
 import {
   WAKE_PROXY_UNKNOWN_REASONS,
+  composeHostWakeRoute,
   composeWakeProxyAvailability,
   planWakeRequest,
-  type WakeProxyInputs
+  type HostWakeRoute,
+  type WakeProxyInputs,
+  type WakeRouteBroker
 } from './host-wake-proxy'
 
 const T0 = 1_760_000_000_000
@@ -186,5 +189,65 @@ describe('composeWakeProxyAvailability', () => {
 
   it('invents no wake stage when the broker gave no answer', () => {
     expect(composeWakeProgress(undefined, null)).toEqual([])
+  })
+})
+
+const CARD_HOST = 'host-card'
+const K = `${'Kq0_'.repeat(10)}K-z`
+const DESK_ID = 'wt_0123456789ab'
+const BOUND_DESK = { targetId: DESK_ID, label: 'desk', hostKey: K }
+
+function routeBroker(
+  brokerHostId: string,
+  targets: unknown[],
+  overrides: Partial<WakeProxyInputs> = {}
+): WakeRouteBroker {
+  return {
+    brokerHostId,
+    inputs: current({ targets: { observedAt: T0 + 2, targets }, ...overrides })
+  }
+}
+
+type RouteRow = {
+  name: string
+  hostKey: string | null
+  brokers: WakeRouteBroker[]
+  expected: HostWakeRoute
+}
+
+// Why a table: the expected route is written by hand, never derived from the composer.
+const ROUTE_ROWS: RouteRow[] = [
+  {
+    name: 'tracer: the one available broker lists one target bound to the card key',
+    hostKey: K,
+    brokers: [routeBroker('host-broker', [BOUND_DESK])],
+    expected: { send: true, brokerHostId: 'host-broker', targetId: DESK_ID, observedAt: T0 + 1 }
+  },
+  {
+    name: 'tracer: the same target with no hostKey is not a binding',
+    hostKey: K,
+    brokers: [routeBroker('host-broker', [{ targetId: DESK_ID, label: 'desk' }])],
+    expected: { send: false, reason: 'no_bound_target' }
+  },
+  {
+    name: 'D-04: two available brokers both bind the card key',
+    hostKey: K,
+    brokers: [
+      routeBroker('host-broker-1', [BOUND_DESK]),
+      routeBroker('host-broker-2', [BOUND_DESK])
+    ],
+    expected: { send: false, reason: 'ambiguous_broker' }
+  }
+]
+
+describe('composeHostWakeRoute', () => {
+  it.each(ROUTE_ROWS.map((row) => [row.name, row] as const))('%s', (_name, row) => {
+    expect(K).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    const route = composeHostWakeRoute({
+      targetHostId: CARD_HOST,
+      hostKey: row.hostKey,
+      brokers: row.brokers
+    })
+    expect(route).toEqual(row.expected)
   })
 })
