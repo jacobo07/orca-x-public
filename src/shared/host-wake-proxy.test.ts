@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HOST_CONNECTIVITY_STATES } from './host-availability'
 import { composeWakeProgress } from './host-wake'
@@ -425,7 +426,7 @@ describe('composeHostWakeRoute', () => {
   })
 
   it('imports no storage and no node: module, so nothing it decides outlives the session', () => {
-    const source = readFileSync(new URL('./host-wake-proxy.ts', import.meta.url), 'utf8')
+    const source = readFileSync(join(__dirname, 'host-wake-proxy.ts'), 'utf8')
     const specifiers = [...source.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map(
       (match) => match[1]
     )
