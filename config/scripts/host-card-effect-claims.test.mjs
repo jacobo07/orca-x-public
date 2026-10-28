@@ -1,15 +1,20 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { parse } from 'jsonc-parser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  CONFIG_PATH,
   MIN_LABELS,
   MIN_RPC_METHODS,
   evaluateHostCardClaims,
   labelTable,
   main
 } from './check-host-card-claims.mjs'
-import { jsxElements } from './host-card-effect-claims.mjs'
+// Why a namespace: a missing export fails only the rows that use it, not the whole file.
+import * as effectClaims from './host-card-effect-claims.mjs'
 
 // Synthetic card and presenter, except the real-repo rows: every red case has a green twin.
 
@@ -29,9 +34,36 @@ const VOCAB = {
   HOST_CAPABILITY_VALUES: ['unknown']
 }
 
-function presenterSource() {
+const WAKE_MODEL = 'src/shared/host-wake.ts'
+const WAKE_TARGET_PRODUCER = `${WAKE_MODEL}#composeWakeProgress`
+const WAKE_ARRAYS = {
+  HOST_WAKE_STAGES: ['requested', 'authorized', 'packet-sent', 'host-announced', 'runtime-ready'],
+  HOST_WAKE_BROKER_STAGES: ['requested', 'authorized', 'packet-sent'],
+  HOST_WAKE_REFUSAL_CODES: ['wake_grant_missing', 'wake_unknown'],
+  HOST_WAKE_CARD_STATES: ['packet-send-failed', 'unknown', 'ambiguous-broker']
+}
+const wakeModelSource = `${Object.entries(WAKE_ARRAYS)
+  .map(([name, items]) => `export const ${name} = [\n  '${items.join("',\n  '")}'\n] as const`)
+  .join('\n')}
+export function composeWakeProgress() {}
+`
+const WAKE_VOCAB = {
+  ...VOCAB,
+  ...WAKE_ARRAYS,
+  HOST_WAKE_CARD_VOCABULARY: [
+    ...WAKE_ARRAYS.HOST_WAKE_STAGES,
+    ...WAKE_ARRAYS.HOST_WAKE_REFUSAL_CODES,
+    ...WAKE_ARRAYS.HOST_WAKE_CARD_STATES
+  ]
+}
+
+function presenterSource(wake = []) {
   const rows = Array.from({ length: MIN_LABELS }, (_, i) => `  'power.awake-${i}': 'Awake',`)
+  for (const { key, text } of wake) {
+    rows.push(`  '${key}': '${text}',`)
+  }
   return `import { compose } from '../shared/model'
+import { composeWakeProgress } from '../src/shared/host-wake'
 export const HOST_CARD_LABELS = {
 ${rows.join('\n')}
 } as const
@@ -70,8 +102,14 @@ function wakeActions(rpc = WAKE_RPC) {
   }
 }
 
-function evaluate({ card = cardSource(), actions = wakeActions(), extraRpc = [WAKE_RPC] } = {}) {
-  const presenter = presenterSource()
+function evaluate({
+  card = cardSource(),
+  actions = wakeActions(),
+  extraRpc = [WAKE_RPC],
+  wake = [],
+  vocab = VOCAB
+} = {}) {
+  const presenter = presenterSource(wake)
   const labels = {}
   for (const row of labelTable(presenter)) {
     labels[row.key] = {
@@ -80,11 +118,14 @@ function evaluate({ card = cardSource(), actions = wakeActions(), extraRpc = [WA
       why: 'the composer proves this from the live answer'
     }
   }
+  for (const { key, entry } of wake) {
+    labels[key] = entry
+  }
   const files = new Map([
     [CARD, card],
     [PRESENTER, presenter]
   ])
-  const repo = { [MODEL]: 'export function compose() {}\n' }
+  const repo = { [MODEL]: 'export function compose() {}\n', [WAKE_MODEL]: wakeModelSource }
   const rpcMethods = new Set([
     ...Array.from({ length: MIN_RPC_METHODS }, (_, i) => `m.${i}`),
     ...extraRpc
@@ -94,8 +135,27 @@ function evaluate({ card = cardSource(), actions = wakeActions(), extraRpc = [WA
     files,
     read: (p) => files.get(p) ?? repo[p] ?? null,
     rpcMethods,
-    vocab: VOCAB
+    vocab
   })
+}
+
+/** One wake label row: broker-observed, composed, live-response, unless `patch` says otherwise. */
+function wakeRow(key, text, patch = {}) {
+  return {
+    key,
+    text,
+    entry: {
+      observer: 'broker',
+      producer: WAKE_TARGET_PRODUCER,
+      evidence: ['live-response'],
+      why: 'the broker reply on this connection names this stage',
+      ...patch
+    }
+  }
+}
+
+function failing(result, pattern) {
+  return result.failures.filter((failure) => pattern.test(failure))
 }
 
 function scopeFailures(result) {
@@ -256,7 +316,7 @@ describe('host-card-effect-claims: scope rule table', () => {
 
   it('depth: jsxElements ends an outer element at its own close, a self-closing one at its />', () => {
     const source = '<Pressable a={1}><Pressable b />x<Pressable c>y</Pressable>z</Pressable>w'
-    const [outer, selfClosing, inner] = jsxElements(source, 'Pressable')
+    const [outer, selfClosing, inner] = effectClaims.jsxElements(source, 'Pressable')
     expect(source.slice(outer.end)).toBe('w')
     expect(source.slice(selfClosing.start, selfClosing.end)).toBe('<Pressable b />')
     expect(source.slice(inner.end)).toBe('z</Pressable>w')
@@ -265,5 +325,234 @@ describe('host-card-effect-claims: scope rule table', () => {
   it('comments: Wake inside // or /* */ comments outside every control is ignored', () => {
     const after = `{/* Wake the host from here */}\n// <Text>Wake</Text>`
     expect(evaluate({ card: cardSource({ after }) }).failures).toEqual([])
+  })
+})
+
+const ANNOUNCED = 'Host answered after wake'
+const target = (patch = {}) => ({ observer: 'target', ...patch })
+
+describe('host-card-effect-claims: wake label family (G7 vocabulary and claims)', () => {
+  it('vocabulary: stages, refusal codes and card states are wake suffixes; woken is not', () => {
+    const wake = [
+      wakeRow('wake.packet-sent', 'Wake packet sent'),
+      wakeRow('wake.wake_grant_missing', 'Wake refused: no grant', {
+        producer: `${WAKE_MODEL}#HOST_WAKE_REFUSAL_CODES`
+      }),
+      wakeRow('wake.ambiguous-broker', 'Wake unavailable: ambiguous broker', {
+        observer: 'phone',
+        producer: `${WAKE_MODEL}#HOST_WAKE_CARD_STATES`
+      })
+    ]
+    expect(evaluate({ wake, vocab: WAKE_VOCAB }).failures).toEqual([])
+    const red = evaluate({
+      wake: [...wake, wakeRow('wake.woken', 'Wake finished')],
+      vocab: WAKE_VOCAB
+    })
+    expect(failing(red, /"woken" is not in HOST_WAKE_CARD_VOCABULARY/)).toHaveLength(1)
+  })
+
+  it('claim family: wake.unknown must say unknown with no evidence; a stage needs evidence', () => {
+    const unknown = (text) =>
+      wakeRow('wake.unknown', text, {
+        observer: 'phone',
+        producer: `${WAKE_MODEL}#HOST_WAKE_CARD_STATES`,
+        evidence: []
+      })
+    expect(
+      evaluate({ wake: [unknown('Wake status unknown')], vocab: WAKE_VOCAB }).failures
+    ).toEqual([])
+    const pending = evaluate({ wake: [unknown('Wake pending')], vocab: WAKE_VOCAB })
+    expect(
+      failing(pending, /"wake\.unknown" must say unknown, but reads "Wake pending"/)
+    ).toHaveLength(1)
+    const bare = evaluate({
+      wake: [wakeRow('wake.packet-sent', 'Wake packet sent', { evidence: [] })],
+      vocab: WAKE_VOCAB
+    })
+    expect(failing(bare, /"wake\.packet-sent" claims a state but names no evidence/)).toHaveLength(
+      1
+    )
+  })
+
+  it('non-vacuity: wake labels with no wake vocabulary fail, never pass unchecked', () => {
+    const wake = [wakeRow('wake.packet-sent', 'Wake packet sent')]
+    const red = evaluate({ wake, vocab: VOCAB })
+    expect(
+      failing(red, /wake label\(s\) but no wake vocabulary \(HOST_WAKE_CARD_VOCABULARY\)/)
+    ).toHaveLength(1)
+    expect(evaluate({ wake, vocab: WAKE_VOCAB }).failures).toEqual([])
+  })
+})
+
+describe('host-card-effect-claims: observer rule (W1-W3, broker versus target evidence)', () => {
+  it('W1: a wake label without an observer, or with relay, fails; broker passes', () => {
+    const missing = evaluate({
+      wake: [wakeRow('wake.requested', 'Wake requested', { observer: undefined })],
+      vocab: WAKE_VOCAB
+    })
+    expect(
+      failing(missing, /"wake\.requested": observer missing is not broker, target or phone/)
+    ).toHaveLength(1)
+    const relay = evaluate({
+      wake: [wakeRow('wake.requested', 'Wake requested', { observer: 'relay' })],
+      vocab: WAKE_VOCAB
+    })
+    expect(
+      failing(relay, /"wake\.requested": observer "relay" is not broker, target or phone/)
+    ).toHaveLength(1)
+    const broker = evaluate({
+      wake: [wakeRow('wake.requested', 'Wake requested')],
+      vocab: WAKE_VOCAB
+    })
+    expect(broker.failures).toEqual([])
+  })
+
+  it('W2: a broker stage observed by the target fails', () => {
+    const red = evaluate({
+      wake: [wakeRow('wake.packet-sent', 'Wake packet sent', target())],
+      vocab: WAKE_VOCAB
+    })
+    expect(
+      failing(red, /"wake\.packet-sent": observer target is only for host-announced, runtime-ready/)
+    ).toHaveLength(1)
+  })
+
+  it('W2: host-announced observed by the broker fails', () => {
+    const red = evaluate({ wake: [wakeRow('wake.host-announced', ANNOUNCED)], vocab: WAKE_VOCAB })
+    expect(failing(red, /"wake\.host-announced": observer must be target/)).toHaveLength(1)
+  })
+
+  it('W2: host-announced from a producer other than composeWakeProgress fails', () => {
+    const red = evaluate({
+      wake: [
+        wakeRow(
+          'wake.host-announced',
+          ANNOUNCED,
+          target({ producer: `${WAKE_MODEL}#HOST_WAKE_STAGES` })
+        )
+      ],
+      vocab: WAKE_VOCAB
+    })
+    expect(
+      failing(
+        red,
+        /"wake\.host-announced": producer must be src\/shared\/host-wake\.ts#composeWakeProgress/
+      )
+    ).toHaveLength(1)
+  })
+
+  it('W2: host-announced without live-response evidence fails', () => {
+    const red = evaluate({
+      wake: [wakeRow('wake.host-announced', ANNOUNCED, target({ evidence: [] }))],
+      vocab: WAKE_VOCAB
+    })
+    expect(
+      failing(red, /"wake\.host-announced": evidence must be exactly \["live-response"\]/)
+    ).toHaveLength(1)
+  })
+
+  it('W2: host-announced from composeWakeProgress with live-response, observed by the target, passes', () => {
+    const green = evaluate({
+      wake: [wakeRow('wake.host-announced', ANNOUNCED, target())],
+      vocab: WAKE_VOCAB
+    })
+    expect(green.failures).toEqual([])
+  })
+
+  it('W3: a broker stage reading Woken fails (the D-09 shape); Wake requested passes', () => {
+    const red = evaluate({ wake: [wakeRow('wake.packet-sent', 'Woken')], vocab: WAKE_VOCAB })
+    expect(failing(red, /"wake\.packet-sent" reads "Woken"/)).toHaveLength(1)
+    const green = evaluate({
+      wake: [wakeRow('wake.requested', 'Wake requested')],
+      vocab: WAKE_VOCAB
+    })
+    expect(green.failures).toEqual([])
+  })
+
+  it('W3: the target may say ready; the same words on a phone label fail', () => {
+    const ready = 'Orca runtime ready after wake'
+    const green = evaluate({
+      wake: [wakeRow('wake.runtime-ready', ready, target())],
+      vocab: WAKE_VOCAB
+    })
+    expect(green.failures).toEqual([])
+    const red = evaluate({
+      wake: [
+        wakeRow('wake.ambiguous-broker', 'Host online', {
+          observer: 'phone',
+          producer: `${WAKE_MODEL}#HOST_WAKE_CARD_STATES`
+        })
+      ],
+      vocab: WAKE_VOCAB
+    })
+    expect(failing(red, /"wake\.ambiguous-broker" reads "Host online"/)).toHaveLength(1)
+  })
+
+  it('WOKEN_WORDING names a woken host and leaves the broker copy alone', () => {
+    for (const text of ['Woken', 'Host awake', 'Back online', 'Up', 'Ready', 'Booted']) {
+      expect(effectClaims.WOKEN_WORDING.test(text)).toBe(true)
+    }
+    for (const text of [
+      'Wake requested',
+      'Wake packet sent',
+      'Wake refused: broker state unconfirmed'
+    ]) {
+      expect(effectClaims.WOKEN_WORDING.test(text)).toBe(false)
+    }
+  })
+})
+
+describe('host-card-effect-claims: wakeModel (G7 non-vacuity)', () => {
+  it('reads the four wake arrays and their union from a model', () => {
+    const vocab = effectClaims.wakeVocabulary(wakeModelSource)
+    expect(vocab).toEqual({
+      ...WAKE_ARRAYS,
+      HOST_WAKE_CARD_VOCABULARY: WAKE_VOCAB.HOST_WAKE_CARD_VOCABULARY
+    })
+    expect(effectClaims.wakeVocabulary('')).toEqual({})
+  })
+
+  it('reads the real host-wake.ts, a commented member list included', () => {
+    const source = fs.readFileSync(path.join(REPO_ROOT, WAKE_MODEL), 'utf8')
+    const vocab = effectClaims.wakeVocabulary(source)
+    expect(vocab.HOST_WAKE_REFUSAL_CODES).toContain('host_key_unavailable')
+    expect(vocab.HOST_WAKE_REFUSAL_CODES.every((code) => /^[a-z_]+$/.test(code))).toBe(true)
+    expect(vocab.HOST_WAKE_CARD_STATES).toEqual([
+      'packet-send-failed',
+      'unknown',
+      'ambiguous-broker'
+    ])
+    expect(vocab.HOST_WAKE_CARD_VOCABULARY).toContain('runtime-ready')
+  })
+
+  it('checkWakeModel fails without wakeModel and on a missing array, passes on a full model', () => {
+    const missing = []
+    effectClaims.checkWakeModel({ config: {}, vocab: WAKE_VOCAB, failures: missing })
+    expect(missing).toEqual([expect.stringMatching(/wakeModel is missing/)])
+    const partial = []
+    const rest = { ...WAKE_VOCAB }
+    delete rest.HOST_WAKE_CARD_STATES
+    effectClaims.checkWakeModel({
+      config: { wakeModel: WAKE_MODEL },
+      vocab: rest,
+      failures: partial
+    })
+    expect(partial).toEqual([`wake vocabulary HOST_WAKE_CARD_STATES not found in ${WAKE_MODEL}`])
+    const full = []
+    effectClaims.checkWakeModel({
+      config: { wakeModel: WAKE_MODEL },
+      vocab: WAKE_VOCAB,
+      failures: full
+    })
+    expect(full).toEqual([])
+  })
+
+  it('main fails on a copy of the real config without wakeModel, naming wakeModel', async () => {
+    const config = parse(fs.readFileSync(path.join(REPO_ROOT, CONFIG_PATH), 'utf8'))
+    expect(config.wakeModel).toBe(WAKE_MODEL)
+    delete config.wakeModel
+    const { code, errors } = await runMain(JSON.stringify(config))
+    expect(code).toBe(1)
+    expect(errors.filter((line) => /wakeModel/.test(line))).toHaveLength(1)
   })
 })
