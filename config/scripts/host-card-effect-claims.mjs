@@ -119,6 +119,14 @@ export function checkEffectWordingScope({
       testID: literalTestID(element.attributes)
     }))
   )
+  for (const control of controls) {
+    const outer = innermostControl(controls, control.start, control)
+    if (outer !== null && actionOf(actions, control.testID)?.kind === 'effect') {
+      failures.push(
+        `${card}:${control.line} effect control "${control.testID}" is nested inside "${outer.testID ?? outer.name}" — an effect control is a sibling of the other controls, never inside one`
+      )
+    }
+  }
   for (const item of cardCopy.filter((entry) => effectVerb.test(entry.text))) {
     const owner = innermostControl(controls, item.index)
     const action = owner === null ? undefined : actionOf(actions, owner.testID)
