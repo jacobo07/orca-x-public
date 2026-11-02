@@ -1,7 +1,7 @@
 ---
 covers: [sidecar-dispatch, observe-only-server, worker-terminal-tag, task-spec-file, headless-coordinator]
 tier: T3
-status: draft (2026-11-02; audit pending)
+status: draft r2 (2026-11-02; architecture audit r1 applied, 15 gaps)
 ---
 
 # Sidecar dispatch: four changes so an outside cockpit can send work through Orca
@@ -12,118 +12,152 @@ The InfinityOps Sidecar (a desktop app, not an Orca terminal) shows the Owner's 
 to send tasks to Claude Code on them (InfinityOps spec `vault/specs/sidecar-window-w2-fleet-f2.md`, r3). Four gaps
 in Orca stand in the way; each is a change here, useful on its own, and inert when nobody uses it.
 
-| | Gap (measured at origin/main eb690201c) | Change |
+| | Gap (measured at origin/main eb690201c; paths under `src/`) | Change |
 |---|---|---|
-| K1 | Every server built from this tree accepts federated workers and remote terminals; the production host the Owner pairs read-only can be given a worker by any Orca terminal on a paired PC | `serve --observe-only` |
-| K2 | No variable tells a worker's terminal apart: every Orca terminal gets `ORCA_TERMINAL_HANDLE` (`src/main/ipc/pty.ts` env builder) | `ORCA_WORKER_DISPATCH_ID` on worker terminals only |
-| K3 | `orchestration task-create` takes the task only as `--spec <text>` on the command line (Windows: 32 767 UTF-16 units in total, readable by same-user processes and process auditing) | `--spec-file <path>` |
-| K4 | Orchestration is terminal-bound: `run-create`, `task-create` and `worker-start` need a coordinator pane | a coordinator without a terminal |
+| K1 | Every server accepts federated workers and remote terminals; a host paired read-only can be given a worker by any Orca terminal on a paired PC | `serve --observe-only` |
+| K2 | No variable tells a worker's terminal apart: every Orca terminal gets `ORCA_TERMINAL_HANDLE` | `ORCA_WORKER_DISPATCH_ID` on worker terminals |
+| K3 | `task-create` takes the task only as `--spec <text>` on the command line (Windows 32 767 UTF-16 units; readable by same-user processes and process auditing) | `--spec-file <path>` |
+| K4 | Orchestration is terminal-bound: run-create, task-create and worker-start need a coordinator pane | a coordinator without a terminal |
+
+Base: eb690201c is the deployed 1399cb2eb plus two native-chat UI commits (slash-command TUI picker); neither touches
+RPC, PTY, orchestration or serve.
 
 ## K1 — `orca serve --observe-only`
 
-- A server started with `--observe-only` answers only an **allowlist of read methods** from paired clients: status,
-  fleet manifest, environment and runtime status, `repo list/show`, `worktree list/show/ps`, `terminal list`
-  (titles and metadata, no output), `orchestration worker-list/worker-show/task-list/gate-list`. Every other method
-  from a paired client is refused with a new code `server_observe_only` before any effect. An allowlist, so a method
-  added later is refused until someone decides it is a read (fail closed).
-- Covered by the refusal, named so a test pins each: `orchestration.federationAttachStart`
-  (`src/main/runtime/rpc/methods/orchestration-federation.ts:24`, refused at the top of the handler, before
-  `createRemoteDispatchAttachment`), remote terminal create/send/read-output, worktree create/remove, repo add,
-  account add.
-- The mode is advertised in the server's capabilities (`server.observe-only.v1`) so a client can show it, but the
-  server enforces it whatever the client does. The local desktop app is not affected (it is not a paired client).
+- **Where.** One refusal point for paired clients: `handleWebSocketMessage` (`main/runtime/runtime-rpc.ts` ~1801),
+  beside the existing `MOBILE_RPC_METHOD_ALLOWLIST` check and reusing its pattern. Direct WebSocket and relay both
+  reach it (`MobileSocketWiring.onText`, ~1453-1462); binary frames reach only handlers an allowed streaming method
+  registered (~1131-1148), so they are closed with it. Nothing runs before it: not the legacy compatibility routing
+  (`rpc/dispatcher.ts:83-89`) and not the mutation receipt (`rpc/orchestration-mutation-executor.ts:65`).
+- **What.** An allowlist of exact method strings, fail closed (a method added later is refused until listed). The
+  list is taken from a captured trace, not from memory, of three real consumers against the server: (1) the home's
+  fleet observation (`main/fleet/fleet-observation-service.ts`: `status.get`, `diagnostics.memory`,
+  `fleet.nodeResources`); (2) the Sidecar F1 reads (worktree/repo/terminal lists, `orchestration.workerList`);
+  (3) opening the host in the desktop app through the shared-control path
+  (`main/ipc/runtime-environment-transport-routing.ts:145-160`). The trace and the resulting list are committed with
+  the change. Terminal *output* reads and every create/send/stop/attach are outside it. Refusal code:
+  `server_observe_only`.
+- **Capability.** An observe-only server withholds the worker-federation capability in `status.get`, so the home's
+  existing preflight (`rpc/methods/orchestration-federated-worker-start.ts` ~64) refuses with `capability_unsupported`
+  before any remote call, and the dispatch ends as **failed**, not unknown. `server_observe_only` is also added to the
+  known failure codes (~233, 268-276) for a client that skips the preflight.
+- The local desktop app on that host and its local CLI are not paired clients and are unaffected.
 - `docs/reference/headless-linux-server.md` gains the flag; the InfinityOps production unit adds it.
-- Tests: each named effect refused with `server_observe_only` and no row/file/process created; each allowlisted read
-  still answers; a method absent from the allowlist is refused (the fail-closed default). Real-host drill: from a raw
-  Orca terminal on a paired PC, `orchestration worker-start --on vps-prod …` is refused and nothing appears on prod.
+- **Tests.** For each refused method: before/after counts of receipts, dispatch and attachment rows, PTYs and
+  worktrees are equal. Each allowlisted read still answers. A method not in the list is refused. The F1 view of the
+  host is unchanged under the flag. Red run: with the allowlist check disabled the refusal tests fail. Real-host
+  drill: from a raw Orca terminal on a paired PC, `orchestration worker-start --on vps-prod …` ends **failed**
+  (`capability_unsupported`) and nothing appears on prod.
 
 ## K2 — `ORCA_WORKER_DISPATCH_ID`
 
-- The terminal Orca creates for a supervised worker carries `ORCA_WORKER_DISPATCH_ID=<dispatchId>`: federated
-  (`federationAttachStart`, the startup terminal of `createManagedWorktree`) and local worker-start alike.
-- Set by the PTY env builder from a trusted creation context, like the trusted-handle rule for
-  `ORCA_TERMINAL_HANDLE` (`pty.ts` ~2572): an inherited or caller-supplied value is deleted unless that terminal was
-  created for that dispatch. A new terminal opened from inside a worker therefore does not inherit the tag through
-  Orca; a child process of the worker's shell does (that is the point).
-- Not a security boundary (a process can unset its own variable); it is what lets a user-level hook refuse
-  `git push` inside workers without touching the Owner's own sessions. Documented as such.
-- Tests: worker terminal has it (local and federated); an ordinary terminal does not; a spoofed value in base env is
-  removed.
+- The terminal Orca creates for a supervised worker carries `ORCA_WORKER_DISPATCH_ID=<dispatchId>`. The dispatch row
+  exists before the terminal is created (`rpc/methods/orchestration-workers.ts:120`; federated id from the home,
+  `orchestration-federation.ts:54-55`).
+- **All three env paths** strip an inherited or caller-supplied value and stamp it only from the trusted creation
+  context, like the trusted-handle rule: local provider `buildSpawnEnv` (`main/ipc/pty.ts` ~2573), the
+  connection/SSH spawn with IPC-supplied env (~4793-4803), the daemon spawn (~6664). WSL rides the local path.
+- **Adopted terminals cannot be tagged** (a live process cannot gain a variable): a worker started on an existing
+  `--terminal` is untagged. Stated in the help text; the Sidecar never passes `--terminal`.
+- Not a security boundary (a process can unset its own variable). It lets a user-level hook refuse `git push`
+  inside workers without touching the Owner's own sessions.
+- **Tests.** Tagged on local, daemon, SSH and WSL worker terminals; absent from an ordinary terminal; a spoofed value
+  in base env or IPC env is removed; an adopted-terminal worker is untagged. Red run: with the strip removed, the
+  spoof test fails.
 
 ## K3 — `orchestration task-create --spec-file <path>`
 
-- Mutually exclusive with `--spec`. The CLI reads the file (UTF-8, at most 256 KiB, no other encoding), sends the
-  text in the RPC body as `--spec` does today, and never prints it. The caller owns the file and deletes it.
-- The retry-request payload hash covers the text, not the path, so a retry with a new temp file and the same text
-  adopts.
-- Tests: both flags → `invalid_argument`; missing/oversize/non-UTF-8 file → typed error; same text via file and via
-  flag produce the same task and the same receipt hash.
+- Mutually exclusive with `--spec`. The CLI reads the file as UTF-8 (at most 256 KiB; a byte-order mark or invalid
+  UTF-8 is refused with a typed error; newlines are kept as they are) and sends a body **identical** to the `--spec`
+  form, with no path field, so the server's receipt hash (computed over canonical params,
+  `orchestration-mutation-executor.ts:35-44`) covers the text only. It never prints the text. The caller owns and
+  deletes the file.
+- **Tests.** Both flags → `invalid_argument`; missing, oversize, BOM and non-UTF-8 files → typed errors; the same text
+  by file and by flag gives the same task and the same receipt hash; a retry with a new file and the same text adopts.
 
 ## K4 — coordinator without a terminal
 
-Requirement: the Sidecar owns a Run, creates tasks, starts, stops and releases workers, and reads `worker_done` and
-asks without a pane, under exactly the rules a terminal coordinator obeys (fencing, retry receipts, one owner per Run).
+### What exists
 
-### What exists (measured at eb690201c; paths under `src/`)
-
-- The coordinator is two columns on the run row, `coordinator_handle` + `coordinator_pane_key`, with
-  `consumer_generation` as the fencing token (`main/runtime/orchestration/db.ts:384-394`); every past coordinator handle
-  is kept in `run_coordinator_handles` (`db.ts:425-455`). `createRun` / `bindRun` bump the generation and fence the
-  outstanding delivery (`db.ts:2479-2656`). Runs are found by pane (`getCurrentRunForPane`, `db.ts:2697`).
-- Mail to the coordinator is a durable mailbox row addressed `run:<id>` (`rpc/methods/orchestration.ts:556-563`,
-  trigger `db.ts:2766-2796`); `check --wait/--ack` pulls it (`orchestration.ts:807-913`). Typing a pointer into the
-  pane is only a nudge and already does nothing when the handle is not a live terminal
-  (`orchestration/mailbox-delivery-target.ts:28-34`). **No delivery needs a pane.**
-- What needs a pane: `requireCallerPane` (run-create/use/current, `rpc/methods/orchestration-runs.ts:30-46`);
-  `resolveRunScope` (`orchestration-run-scope.ts:47-85`: task create/update, dispatch, reply, check, gates, reviews);
-  `workerStart`'s run lookup (`orchestration-workers.ts:31-38`, before the federated branch) and the local path's
-  coordinator worktree (`:65-85`, `orchestration-worker-topology.ts:134-152`); `missionPlace.boundRun`
-  (`orchestration-mission.ts:44-54`); `resolveMessageRun` (`orchestration.ts:342-345`); the CLI's handle resolution,
-  which falls back to the **focused** terminal when no handle is given (`cli/handlers/orchestration.ts:211-241`,
-  `cli/selectors.ts:148-160`).
-- Caller identity is weak today: compatibility evidence is optional (`orchestration-run-scope.ts:17-34`), so a local
-  caller can name any live terminal in `--from`; every local-socket call shares one mutation fingerprint
-  (`db.ts:1629-1655`). Not changed here; recorded as debt.
+- The coordinator is two run columns, `coordinator_handle` + `coordinator_pane_key`, fenced by `consumer_generation`
+  (`main/runtime/orchestration/db.ts:384-394`); past handles are kept in `run_coordinator_handles` (`:425-455`);
+  `createRun`/`bindRun` bump the generation and fence the outstanding delivery (`:2479-2656`); runs are found by pane
+  (`:2697`).
+- Mail to the coordinator is a durable mailbox row `run:<id>` (`rpc/methods/orchestration.ts:556-563`, trigger
+  `db.ts:2766-2796`) pulled by `check --wait/--ack` (`orchestration.ts:807-913`). The pane pointer is only a nudge and
+  already does nothing for a non-terminal handle (`orchestration/mailbox-delivery-target.ts:28-34`). No delivery needs
+  a pane.
+- Sites that need a pane: `requireCallerPane` (`rpc/methods/orchestration-runs.ts:30-46`); `resolveRunScope`
+  (`orchestration-run-scope.ts:47-85`: task create/update, dispatch, reply, check, gates, reviews); `workerStart`'s run
+  lookup (`orchestration-workers.ts:31-38`) and local coordinator worktree (`:65-85`,
+  `orchestration-worker-topology.ts:134-152`); `missionPlace.boundRun` (`orchestration-mission.ts:44-54`);
+  `resolveMessageRun` (`orchestration.ts:342-345`); and two pre-handler sites: the legacy coordinator preflight
+  (`orchestration-legacy-compatibility.ts:68-108`, `coordinator-authority.ts:18-95`) and `replayStableCallerParams`
+  (`orchestration-mutation-executor.ts:145-166`).
+- Caller-supplied identity fields are trusted in places: `check` falls back to `params.terminalPaneKey`
+  (`orchestration.ts:768-778`), send/reply use `params.senderPaneKey` (`:330`, `:343`), `resolveRunScope` takes
+  `callerPaneKey` first (`orchestration-run-scope.ts:58`). Compatibility evidence is optional (`:17-34`), so a local
+  caller can name any live terminal in `--from`. That stays as debt for terminal runs; K4 must not inherit it.
 
 ### Change
 
-1. **Identity.** A headless coordinator is named `headless:<name>` (letters, digits, `-`; at most 40). Its synthetic
-   pane key is the same string; it has no `tab:leaf` part, so the existing pane-key matching (`db.ts:118-127`,
-   `:2702-2718`) treats it as an exact key. Stored in the existing `coordinator_handle` / `coordinator_pane_key`
-   columns; `run_coordinator_handles` and the mail trigger work unchanged.
-2. **Proof of ownership.** `run-create --headless <name>` returns, once, a random 256-bit coordinator token; the run
-   keeps only its hash (new nullable column `runs.coordinator_token_hash`, one migration). Every later headless call
-   carries the token in the environment variable `ORCA_HEADLESS_COORDINATOR_TOKEN` (never on argv) and the name in
-   `ORCA_HEADLESS_COORDINATOR`. The server compares in constant time; a mismatch is `coordinator_auth_failed`.
-   Headless identity is accepted from **local callers only** (`isLocalRpcCaller`); a paired remote is refused.
-3. **One resolver.** A single `resolveCallerPaneKey(params, runtime)` returns the synthetic key for a verified
-   headless caller and `getTerminalPaneKey(handle)` otherwise; `requireCallerPane`, `resolveRunScope`, `workerStart`,
-   `boundRun` and `resolveMessageRun` call it. Nothing else changes in their logic.
-4. **Rebind.** `run-use --headless <name>` with the run's token rebinds it (generation bump, outstanding delivery
-   fenced), so the client takes its run back after its own restart. A different name, or no token, cannot.
-5. **Worker start without a coordinator worktree.** For a headless caller, `worker-start` requires `--on` with
-   `--worktree new-top-level --repo <exact> --name`, or a local exact `--worktree <selector>` / `--repo`;
-   `current` and `new-child` are refused with `headless_coordinator_has_no_worktree`. Lineage records no caller
-   terminal (`orchestration-worker-topology.ts:151`).
-6. **CLI.** With `ORCA_HEADLESS_COORDINATOR` set, the CLI sends the headless identity and never falls back to the
-   focused terminal or `ORCA_TERMINAL_HANDLE`; without it, behaviour is exactly today's.
-7. **Preamble.** The worker preamble names `headless:<name>` as the coordinator (`orchestration/preamble.ts:61`), so a
-   worker's `send --to headless:<name>` and `worker_done` route to `run:<id>` through the existing trigger.
+1. **Name.** `headless:<name>`, where `<name>` is 3-40 of `[a-z0-9-]` and is refused if UUID-shaped, so it can never
+   parse as a `tab:leaf` pane key (`shared/stable-pane-id.ts:32-44`) nor suffix-match a real pane (`db.ts:116-127`,
+   `:2704-2717`). Handle and synthetic pane key are both that string, in the existing columns.
+2. **Token minted by the client.** The client generates a 256-bit token and sends it at `run-create --headless
+   <name>` in a body field `coordinatorToken` (from `ORCA_HEADLESS_COORDINATOR_TOKEN`, never argv). The server stores
+   only its SHA-256 (new nullable column `runs.coordinator_token_hash`, one migration) and **never returns it**, so the
+   mutation receipt (which stores the result, `orchestration-mutation-executor.ts:99-111`) holds no secret, and a
+   retry resends the same token. The receipt payload hash covers the hash, not the token.
+3. **Every identity field is gated.** A `headless:` value in any of `from`, `terminal`, `terminalPaneKey`,
+   `senderPaneKey`, `callerPaneKey`, or in replayed stable caller params, is accepted only after the token verifies
+   (constant-time compare against the run's hash); otherwise `coordinator_auth_failed`. Headless identity is accepted
+   from local callers only (`isLocalRpcCaller`, verified sound: `runtime-rpc.ts:1689`, `dispatcher.ts:103-118` vs
+   paired `1872-1886`, `196-219`); paired remotes get `coordinator_auth_failed`.
+4. **One resolver.** `resolveCallerPaneKey` returns the synthetic key for a verified headless caller and
+   `getTerminalPaneKey(handle)` otherwise; the sites above call it. The legacy preflight returns not-handled for a
+   headless caller; `from` stays a plain string in the payload hash.
+5. **Projection.** `runShow`/`runList` (`orchestration-runs.ts:125-138`) never return `coordinator_token_hash`.
+6. **Rebind and rotation.** `run-use --headless <name>` with the current token rebinds (generation bump, delivery
+   fenced) and may carry `newCoordinatorToken` to rotate the hash in the same transaction.
+7. **Lost token.** Recovery is a local-only verb, `orchestration run-reset-coordinator --run <id> --headless <name>`,
+   accepted only from the local desktop's own UI confirmation path (not the CLI alone), which sets a new hash supplied
+   by the caller, bumps the generation and fences the outstanding delivery. Running workers keep going; their
+   `worker_done` stays in the mailbox and is read after the reset. If the Owner instead abandons the run,
+   `orchestration run-abandon --run <id>` stops and releases its workers without a coordinator. Both are logged as run
+   events.
+8. **Worker start without a coordinator worktree.** For a headless caller `worker-start` requires `--on` with
+   `--worktree new-top-level --repo <exact> --name`, or a local exact `--worktree <selector>`/`--repo`; `current` and
+   `new-child` are refused with `headless_coordinator_has_no_worktree`; `--terminal` is refused (K2). Lineage records
+   no caller terminal (`orchestration-worker-topology.ts:151`).
+9. **CLI.** With `ORCA_HEADLESS_COORDINATOR` set, the CLI sends only the headless identity and token: it omits
+   compatibility evidence (`cli/runtime/orchestration-compatibility-envelope.ts:10`), `ORCA_PANE_KEY` and
+   `ORCA_TERMINAL_HANDLE`, and never falls back to the focused terminal. Without it, behaviour is exactly today's.
+10. **Preamble.** Names `headless:<name>` as the coordinator (`orchestration/preamble.ts:61`); `worker_done` and
+    `send --to headless:<name>` route to `run:<id>` through the existing trigger.
 
 ### Tests
 
-Headless run-create from a local caller works and returns a token once; from a paired remote it is refused; a wrong
-or missing token is `coordinator_auth_failed`; task-create, federated worker-start, worker-stop/release and
+Headless run-create from a local caller works and returns no token; the receipt row contains no token; from a paired
+remote it is refused. For each identity field (`from`, `terminal`, `terminalPaneKey`, `senderPaneKey`,
+`callerPaneKey`, replayed params): a `headless:` value without the token is `coordinator_auth_failed` and the mailbox
+is unread afterwards. UUID-shaped names refused. task-create, federated worker-start, worker-stop/release and
 `check --wait --ack` work headless; `worker_done` and an `ask` reach the headless mailbox and `reply` answers it;
-`current`/`new-child` refused for headless; a rebind fences the previous generation's delivery; a headless call never
-picks the focused terminal; the existing terminal-coordinator suites pass unchanged.
+`current`/`new-child`/`--terminal` refused for headless; rebind fences the previous delivery; rotation invalidates the
+old token; reset and abandon behave as stated; run show/list omit the hash; with all three of
+`ORCA_TERMINAL_HANDLE`/`ORCA_PANE_KEY`/evidence set, a headless call still resolves headless; the existing
+terminal-coordinator suites pass unchanged. Red runs: token check skipped → the gating tests fail; field gate removed
+for `terminalPaneKey` → its test fails.
 
 ## Out of scope
 
 The gate decision verb for subject-bound gates (InfinityOps F3) gets its own spec. No change here alters how a
-terminal coordinator works today.
+terminal coordinator works today; the existing `--from` impersonation for terminal runs is recorded debt.
 
-## Rollout
+## Rollout and rollback
 
 One build from this branch (rebased on main at merge time), deployed to all four hosts like the F0.5 rebuild in
-InfinityOps spec `sidecar-window-w2-fleet.md` 3.2; vps-prod restarted with `--observe-only`.
+InfinityOps spec `sidecar-window-w2-fleet.md` 3.2; vps-prod restarted with `--observe-only`. Downgrade drill before
+deploy: the previous build (1399cb2eb) started against a database migrated by this one either runs (the new column
+ignored) or refuses on a schema-version fence; the result is recorded, and the previous `/opt/orca/<ver>` dirs stay
+until it passes.
