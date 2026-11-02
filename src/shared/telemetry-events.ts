@@ -65,6 +65,7 @@ import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydra
 // Mirrors `TuiAgent` launch surface; `claude`↔`claude-code` (product, not CLI string). `other` is the escape hatch; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'kclaude',
   'claude-agent-teams',
   'openclaude',
   'codex',
