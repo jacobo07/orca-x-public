@@ -159,6 +159,22 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('reveals the terminal after a typed /resume, whose picker native chat cannot draw', () => {
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn(),
+      onAgentPicker
+    })!
+    surface.recordOutgoingCommand('/compact')
+    surface.recordOutgoingCommand('/resume 3f2a')
+    expect(onAgentPicker).not.toHaveBeenCalled()
+    surface.recordOutgoingCommand('/resume')
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+  })
+
   it('reveals the terminal only when Claude actually requires model-switch interaction', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
     const dispatch = vi.fn().mockResolvedValue({ outcome: 'interaction-required' })

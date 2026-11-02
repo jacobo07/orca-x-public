@@ -25,10 +25,32 @@ const COMMON_COMMANDS: readonly SlashCommandSuggestion[] = [
 const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation history' },
   { name: 'compact', description: 'Summarize and compact the conversation' },
+  { name: 'resume', description: 'Resume a previous conversation' },
   { name: 'init', description: 'Initialize a CLAUDE.md' },
   { name: 'review', description: 'Review the current changes' },
+  { name: 'agents', description: 'Manage subagents' },
+  { name: 'mcp', description: 'Manage MCP servers' },
+  { name: 'config', description: 'Open settings' },
+  { name: 'permissions', description: 'Manage tool permissions' },
+  { name: 'hooks', description: 'Manage hooks' },
   { name: 'help', description: 'Show available commands' }
 ]
+
+// Bare commands the TUI answers with an interactive picker drawn in the terminal. Native chat
+// cannot render it, so after dispatch the client brings the terminal forward.
+const CLAUDE_TUI_PICKER_COMMANDS = new Set(['resume', 'agents', 'mcp', 'config', 'permissions', 'hooks'])
+const TUI_PICKER_COMMANDS: Partial<Record<ProviderType, ReadonlySet<string>>> = {
+  claude: CLAUDE_TUI_PICKER_COMMANDS,
+  openclaude: CLAUDE_TUI_PICKER_COMMANDS,
+  codex: new Set(['resume', 'permissions', 'theme', 'personality', 'statusline', 'title'])
+}
+
+/** Whether sending `command` makes the agent's TUI show a picker (a bare picker command;
+ *  `/resume <id>` resumes directly and stays in chat). */
+export function opensAgentTuiPicker(agent: ProviderType, command: string): boolean {
+  const match = /^\/([a-z][\w-]*)$/i.exec(command.trim())
+  return match !== null && (TUI_PICKER_COMMANDS[agent]?.has(match[1]!.toLowerCase()) ?? false)
+}
 
 const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'model', description: 'Choose the model and reasoning effort' },

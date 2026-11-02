@@ -14,6 +14,7 @@ import {
   buildNativeChatSessionOptionCommand,
   recordNativeChatSessionOptionCommand
 } from '../../../src/shared/native-chat-session-option-commands'
+import { opensAgentTuiPicker } from '../../../src/shared/native-chat-slash-commands'
 import {
   buildNativeChatSessionOptionSnapshot,
   withTrackedNativeChatModel
@@ -324,20 +325,25 @@ export function useMobileNativeChatSessionOptions(args: {
 
   const recordCommand = useCallback(
     (command: string): void => {
-      if (!catalog || !scopeKey || !agent) {
+      if (!agent) {
         return
       }
-      const record = getScopedRecord(scopeKey, agent)
-      const result = recordNativeChatSessionOptionCommand({
-        catalog,
-        models: activeModels(catalog, record),
-        record,
-        command
-      })
-      if (result.changed) {
-        bump()
+      // Why before the catalog guard: a picker-only command needs no option catalog to show.
+      let opensPicker = opensAgentTuiPicker(agent, command)
+      if (catalog && scopeKey) {
+        const record = getScopedRecord(scopeKey, agent)
+        const result = recordNativeChatSessionOptionCommand({
+          catalog,
+          models: activeModels(catalog, record),
+          record,
+          command
+        })
+        if (result.changed) {
+          bump()
+        }
+        opensPicker ||= result.opensAgentPicker
       }
-      if (result.opensAgentPicker) {
+      if (opensPicker) {
         onAgentPicker?.()
       }
     },
