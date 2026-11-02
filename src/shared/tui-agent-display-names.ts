@@ -7,6 +7,7 @@ import type { TuiAgent } from './tui-agent'
  * in sync with its `label` values when adding an agent. */
 export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   claude: 'Claude',
+  kclaude: 'kClaude',
   'claude-agent-teams': 'Claude Agent Teams',
   openclaude: 'OpenClaude',
   codex: 'Codex',

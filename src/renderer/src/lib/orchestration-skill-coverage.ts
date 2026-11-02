@@ -33,8 +33,10 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
 // Why: `native-chat-agent-profiles.ts` carries the same rule as `skillSourceOwner`;
 // keep the two in step when an agent starts reading another agent's roots.
 function getSkillSourceOwnerForAgent(agent: TuiAgent): ProviderType {
-  // Why: both launch Claude Code and therefore consume Claude-owned skill roots.
-  return agent === 'claude-agent-teams' || agent === 'openclaude' ? 'claude' : agent
+  // Why: these launch Claude Code and therefore consume Claude-owned skill roots.
+  return agent === 'kclaude' || agent === 'claude-agent-teams' || agent === 'openclaude'
+    ? 'claude'
+    : agent
 }
 
 /** `skills` and `sources` must come from the same discovery scan. */
