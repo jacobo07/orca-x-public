@@ -4,8 +4,34 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
+  opensAgentTuiPicker,
   slashCommandDispatchText
 } from './native-chat-slash-commands'
+
+describe('opensAgentTuiPicker', () => {
+  it('flags a bare Claude /resume, which answers with a picker drawn in the terminal', () => {
+    expect(opensAgentTuiPicker('claude', '/resume')).toBe(true)
+    expect(opensAgentTuiPicker('claude', '  /resume  ')).toBe(true)
+    expect(opensAgentTuiPicker('openclaude', '/resume')).toBe(true)
+    expect(opensAgentTuiPicker('codex', '/resume')).toBe(true)
+  })
+
+  it('control: arguments, prose and non-picker commands stay in native chat', () => {
+    expect(opensAgentTuiPicker('claude', '/resume 3f2a')).toBe(false)
+    expect(opensAgentTuiPicker('claude', '/resumes')).toBe(false)
+    expect(opensAgentTuiPicker('claude', 'please /resume')).toBe(false)
+    expect(opensAgentTuiPicker('claude', '/compact')).toBe(false)
+    expect(opensAgentTuiPicker('gemini', '/resume')).toBe(false)
+  })
+
+  it('lists every Claude picker command in the Claude autocomplete catalog', () => {
+    const names = getAgentSlashCommands('claude').map((c) => c.name)
+    for (const name of ['resume', 'agents', 'mcp', 'config', 'permissions', 'hooks']) {
+      expect(opensAgentTuiPicker('claude', `/${name}`)).toBe(true)
+      expect(names).toContain(name)
+    }
+  })
+})
 
 describe('getAgentSlashCommands', () => {
   it('returns Codex-specific commands (e.g. /model, /resume) for codex', () => {

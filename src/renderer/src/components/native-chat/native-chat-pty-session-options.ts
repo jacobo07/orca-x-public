@@ -9,6 +9,7 @@ import type {
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import { recordNativeChatSessionOptionCommand } from '../../../../shared/native-chat-session-option-commands'
+import { opensAgentTuiPicker } from '../../../../shared/native-chat-slash-commands'
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
@@ -191,7 +192,7 @@ export function createNativeChatPtySessionOptions(
       if (result.changed) {
         publish()
       }
-      if (result.opensAgentPicker) {
+      if (result.opensAgentPicker || opensAgentTuiPicker(args.agent, command)) {
         args.onAgentPicker?.()
       }
     },

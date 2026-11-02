@@ -107,6 +107,21 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(onAgentPicker).toHaveBeenCalledOnce()
   })
 
+  it('brings the terminal forward after a typed Claude /resume, and not for other sends', () => {
+    mount()
+    act(() => api!.recordCommand('/compact'))
+    act(() => api!.recordCommand('/resume 3f2a'))
+    expect(onAgentPicker).not.toHaveBeenCalled()
+    act(() => api!.recordCommand('/resume'))
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+  })
+
+  it('brings the terminal forward for /resume even when the agent has no option catalog', () => {
+    mount({ agent: 'openclaude' })
+    act(() => api!.recordCommand('/resume'))
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+  })
+
   it('types the Codex effort picker command', async () => {
     mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
     await act(async () => {
