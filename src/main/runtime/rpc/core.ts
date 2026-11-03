@@ -1,4 +1,5 @@
 // Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
+import type { HeadlessCoordinatorAuthority } from '../orchestration/headless-coordinator'
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
@@ -51,6 +52,10 @@ export type RpcRequest = {
   orchestrationRequestId?: string
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why envelope, not params: zod strips unknown params, and the token must never reach a payload
+  // hash, a receipt or a handler. Only the dispatcher's headless gate reads these (K4).
+  orchestrationCoordinatorToken?: string
+  orchestrationNewCoordinatorToken?: string
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{
@@ -97,6 +102,8 @@ export type RpcContext = {
   legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
   revalidateLegacyCoordinator?: () => string
   orchestrationCompatibilityCallerAuthority?: OrchestrationCompatibilityCallerAuthority
+  // Why: set only by the dispatcher after the headless token verified; user params cannot set it.
+  headlessCoordinator?: HeadlessCoordinatorAuthority
   // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext

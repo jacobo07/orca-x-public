@@ -1,3 +1,4 @@
+import { resolveCallerPaneKey } from '../orchestration/headless-coordinator'
 import { createHash } from 'node:crypto'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -156,7 +157,7 @@ function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown):
     const paneKey =
       property === 'from' && typeof source.senderPaneKey === 'string'
         ? source.senderPaneKey
-        : runtime.getTerminalPaneKey(handle)
+        : resolveCallerPaneKey(runtime, handle)
     if (paneKey) {
       const leafId = parsePaneKey(paneKey)?.leafId
       result[property] = leafId ? { paneLeafId: leafId } : { paneKey }

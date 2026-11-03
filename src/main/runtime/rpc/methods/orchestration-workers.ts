@@ -1,3 +1,4 @@
+import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { assertWorkerStartMatchesPlacement } from '../../orchestration/mission-dispatch-placement'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
@@ -28,7 +29,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
     params: WorkerStartParams,
     handler: async (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = runtime.getTerminalPaneKey(params.from)
+      const coordinatorPane = resolveCallerPaneKey(runtime, params.from)
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(

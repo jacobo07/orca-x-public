@@ -24,3 +24,20 @@ function isLocalMutationFingerprint(ctx: RpcContext): boolean {
     return false
   }
 }
+
+// Why the same stamps as isLocalRpcCaller: any of them means the request came from another machine.
+export function isLocalStreamingCaller(options?: {
+  pairedDeviceId?: unknown
+  clientId?: unknown
+  connectionId?: unknown
+  clientKind?: unknown
+  authenticatedCallerFingerprint?: unknown
+}): boolean {
+  return !(
+    options?.pairedDeviceId ||
+    options?.clientId ||
+    options?.connectionId ||
+    options?.clientKind ||
+    options?.authenticatedCallerFingerprint
+  )
+}

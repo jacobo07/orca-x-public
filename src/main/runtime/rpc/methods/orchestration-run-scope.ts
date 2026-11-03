@@ -1,3 +1,4 @@
+import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
 import type { OrchestrationCompatibilityEvidence } from '../../../../shared/orchestration-compatibility-evidence'
 import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -55,7 +56,7 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
   if (explicit && params.legacyCoordinatorRunId === explicit.id) {
     return explicit
   }
-  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
+  const paneKey = params.callerPaneKey ?? resolveCallerPaneKey(runtime, params.callerTerminalHandle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the two dispatch entry points must apply the same pre-handler gates in the same order; splitting them across files would invite drift between transports. */
 import {
   buildRegistry,
   formatZodError,
@@ -26,6 +27,11 @@ import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
+import { isLocalStreamingCaller } from './local-rpc-caller'
+import {
+  authorizeHeadlessCoordinator,
+  type HeadlessCoordinatorAuthority
+} from '../orchestration/headless-coordinator'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -80,6 +86,11 @@ export class RpcDispatcher {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
+      const headlessCoordinator = this.authorizeHeadless(
+        request,
+        parsedParams.value,
+        options?.authenticatedCallerFingerprint === undefined
+      )
       const compatibility = await this.legacyOrchestration.tryHandle(
         request,
         parsedParams.value,
@@ -114,7 +125,8 @@ export class RpcDispatcher {
           revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
           orchestrationCompatibilityCallerAuthority:
             compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence,
+          headlessCoordinator
         })
       }
       const result = await this.orchestrationMutations.run(
@@ -172,6 +184,11 @@ export class RpcDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
+        const headlessCoordinator = this.authorizeHeadless(
+          request,
+          parsedParams.value,
+          isLocalStreamingCaller(options)
+        )
         const compatibility = await this.legacyOrchestration.tryHandle(
           request,
           parsedParams.value,
@@ -215,7 +232,8 @@ export class RpcDispatcher {
             revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
             orchestrationCompatibilityCallerAuthority:
               compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence,
+            headlessCoordinator
           })
         }
         const result = await this.orchestrationMutations.run(
@@ -299,6 +317,24 @@ export class RpcDispatcher {
       }
     }
     return { value: result.data }
+  }
+
+  // Why here: the one point every transport crosses before legacy routing, receipts and handlers.
+  private authorizeHeadless(
+    request: RpcRequest,
+    params: unknown,
+    isLocalCaller: boolean
+  ): HeadlessCoordinatorAuthority | undefined {
+    // Why every method: non-orchestration methods also carry caller fields (worktree.create's
+    // callerTerminalHandle); a headless value anywhere must be proven or refused.
+    return authorizeHeadlessCoordinator({
+      method: request.method,
+      params,
+      token: request.orchestrationCoordinatorToken,
+      newToken: request.orchestrationNewCoordinatorToken,
+      isLocalCaller,
+      getDb: () => this.runtime.getOrchestrationDb()
+    })
   }
 
   private meta(): RpcEnvelopeMeta {

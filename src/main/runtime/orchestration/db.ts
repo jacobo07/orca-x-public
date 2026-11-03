@@ -223,9 +223,11 @@ function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[] {
   return messages.map(exposeMessageTimestamps)
 }
 
-function exposeRunTimestamps(run: RunRow): RunRow {
+// Why strip here: every public Run projection passes through this, and the token hash must never leave.
+function exposeRunTimestamps(run: RunRow & { coordinator_token_hash?: string | null }): RunRow {
+  const { coordinator_token_hash: _tokenHash, ...publicRun } = run
   return {
-    ...run,
+    ...publicRun,
     created_at: exposeUtcTimestamp(run.created_at) ?? run.created_at,
     updated_at: exposeUtcTimestamp(run.updated_at) ?? run.updated_at
   }
@@ -341,7 +343,7 @@ const TASK_PLACEMENTS_TABLE_SQL = `
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task, v33 subject-bound decision gates, v34 task host placements.
 // Exported so a test can assert "this database is at the current schema" without restating the
 // number: four files hardcoded 28 and all of them broke on the v29 bump.
-export const SCHEMA_VERSION = 34
+export const SCHEMA_VERSION = 35
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -390,7 +392,8 @@ export class OrchestrationDb {
         consumer_generation   INTEGER NOT NULL DEFAULT 0,
         legacy                INTEGER NOT NULL DEFAULT 0,
         created_at            TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+        updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        coordinator_token_hash TEXT
       );
 
       CREATE TABLE IF NOT EXISTS messages (
@@ -740,7 +743,11 @@ export class OrchestrationDb {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const created = this.createTask(task)
-      const row = this.reviews().create({ ...review, runId: created.run_id, reviewTaskId: created.id })
+      const row = this.reviews().create({
+        ...review,
+        runId: created.run_id,
+        reviewTaskId: created.id
+      })
       this.db.exec('COMMIT')
       return { task: created, review: row }
     } catch (error) {
@@ -1178,6 +1185,10 @@ export class OrchestrationDb {
       }
       if (current < 34) {
         this.db.exec(TASK_PLACEMENTS_TABLE_SQL)
+      }
+      // Why: a headless coordinator authenticates with a token whose SHA-256 is all the Run keeps.
+      if (current < 35 && !this.hasColumn('runs', 'coordinator_token_hash')) {
+        this.db.exec('ALTER TABLE runs ADD COLUMN coordinator_token_hash TEXT')
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -2480,6 +2491,7 @@ export class OrchestrationDb {
     objective: string
     coordinatorHandle: string
     coordinatorPaneKey: string
+    coordinatorTokenHash?: string
   }): RunRow {
     const id = generateId('run')
     this.db.exec('BEGIN IMMEDIATE')
@@ -2489,10 +2501,16 @@ export class OrchestrationDb {
         .prepare(
           `INSERT INTO runs (
              id, objective, coordinator_handle, coordinator_pane_key,
-             consumer_generation, legacy
-           ) VALUES (?, ?, ?, ?, 1, 0)`
+             consumer_generation, legacy, coordinator_token_hash
+           ) VALUES (?, ?, ?, ?, 1, 0, ?)`
         )
-        .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
+        .run(
+          id,
+          params.objective,
+          params.coordinatorHandle,
+          params.coordinatorPaneKey,
+          params.coordinatorTokenHash ?? null
+        )
       this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
       this.db.exec('COMMIT')
     } catch (error) {
@@ -2506,6 +2524,8 @@ export class OrchestrationDb {
     runId: string
     coordinatorHandle: string
     coordinatorPaneKey: string
+    // Why: set for a headless binding, null for a terminal one (a terminal takeover voids the token).
+    coordinatorTokenHash?: string | null
     takeoverLegacy?: boolean
     legacyCoordinatorAuthority?: {
       runId: string
@@ -2637,11 +2657,17 @@ export class OrchestrationDb {
           .prepare(
             `UPDATE runs
              SET coordinator_handle = ?, coordinator_pane_key = ?,
+                 coordinator_token_hash = ?,
                  consumer_generation = consumer_generation + 1,
                  updated_at = datetime('now')
              WHERE id = ?`
           )
-          .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
+          .run(
+            params.coordinatorHandle,
+            params.coordinatorPaneKey,
+            params.coordinatorTokenHash ?? null,
+            params.runId
+          )
         this.fenceOutstandingDelivery(params.runId)
         if (params.takeoverLegacy || replacesLegacyCoordinator) {
           this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
@@ -2715,6 +2741,40 @@ export class OrchestrationDb {
       (run) =>
         run.coordinator_pane_key !== null && isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
     )
+  }
+
+  /** The stored token hash of one Run, or null (terminal Run, legacy Run, or no such Run). */
+  getCoordinatorTokenHash(runId: string): string | null {
+    const row = this.db
+      .prepare('SELECT coordinator_token_hash FROM runs WHERE id = ? AND legacy = 0')
+      .get(runId) as { coordinator_token_hash: string | null } | undefined
+    return row?.coordinator_token_hash ?? null
+  }
+
+  /**
+   * The Run currently bound to a headless coordinator key, with its token hash. Why exact match:
+   * a headless key is never a terminal pane key, so the pane suffix matching does not apply.
+   */
+  getCoordinatorTokenHashForPane(
+    paneKey: string
+  ): { runId: string; tokenHash: string | null } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT id, coordinator_token_hash FROM runs
+         WHERE coordinator_pane_key = ? AND legacy = 0
+         ORDER BY rowid LIMIT 1`
+      )
+      .get(paneKey) as { id: string; coordinator_token_hash: string | null } | undefined
+    return row ? { runId: row.id, tokenHash: row.coordinator_token_hash } : undefined
+  }
+
+  /** Replaces the token hash of the Run's current headless coordinator (rotation). */
+  rotateCoordinatorTokenHash(runId: string, tokenHash: string): void {
+    this.db
+      .prepare(`
+        UPDATE runs SET coordinator_token_hash = ?, updated_at = datetime('now')
+        WHERE id = ? AND coordinator_token_hash IS NOT NULL`)
+      .run(tokenHash, runId)
   }
 
   private getRunRaw(id: string): RunRow | undefined {
@@ -4545,7 +4605,9 @@ export class OrchestrationDb {
       ancestors: this.delegationAncestors(task.parentId),
       parentChildCount: task.parentId
         ? (
-            this.db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?').get(task.parentId) as {
+            this.db
+              .prepare('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?')
+              .get(task.parentId) as {
               n: number
             }
           ).n
@@ -4631,7 +4693,14 @@ export class OrchestrationDb {
            fingerprint = excluded.fingerprint, address = excluded.address,
            label = excluded.label, placed_at = datetime('now')`
       )
-      .run(params.taskId, task.run_id, params.hostKey, params.fingerprint, params.address, params.label)
+      .run(
+        params.taskId,
+        task.run_id,
+        params.hostKey,
+        params.fingerprint,
+        params.address,
+        params.label
+      )
     return this.db
       .prepare('SELECT * FROM task_placements WHERE task_id = ?')
       .get(params.taskId) as TaskPlacementRow

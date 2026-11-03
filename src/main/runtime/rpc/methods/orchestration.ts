@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: RPC method definitions co-locate param schemas with handlers; splitting by method would scatter the shared enums and Zod transforms without reducing complexity. */
+import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { defineMethod, type RpcMethod } from '../core'
@@ -340,7 +341,7 @@ function resolveMessageRun(
   let run = resolvedRunId ? db.getRun(resolvedRunId) : undefined
 
   if (!run && params.from) {
-    const paneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(params.from)
+    const paneKey = params.senderPaneKey ?? resolveCallerPaneKey(runtime, params.from)
     run = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
   }
   if (resolvedRunId && (!run || run.legacy === 1)) {
@@ -436,7 +437,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? orchestrationCompatibilityCallerAuthority
           : undefined
       // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
-      const senderPaneKey = attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+      const senderPaneKey =
+        attestedCaller?.paneKey ?? resolveCallerPaneKey(runtime, from) ?? undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -765,7 +767,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
-      const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
+      const paneKey = resolveCallerPaneKey(runtime, handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
       if (params.run || boundRun) {
         const run = resolveRunScope(runtime, {
@@ -1622,7 +1624,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const from = params.from ?? 'unknown'
       // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
-      const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      const paneKey = resolveCallerPaneKey(runtime, from) ?? undefined
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment) {
         rejectFederatedExplicitTarget(params)

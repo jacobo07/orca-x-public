@@ -1,3 +1,4 @@
+import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
 import { z } from 'zod'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -42,7 +43,7 @@ const MissionPlaceParams = z
 const MissionResultsParams = z.object({ run: requiredString('Missing --run') }).strict()
 
 function boundRun(runtime: OrcaRuntimeService, db: OrchestrationDb, from: string, run?: string) {
-  const pane = runtime.getTerminalPaneKey(from)
+  const pane = resolveCallerPaneKey(runtime, from)
   const bound = pane ? db.getCurrentRunForPane(pane) : undefined
   if (!bound || (run && run !== bound.id)) {
     throw new OrchestrationError(

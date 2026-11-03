@@ -1,3 +1,9 @@
+import {
+  COORDINATOR_AUTH_FAILED,
+  isHeadlessHandle,
+  resolveCallerPaneKey,
+  type HeadlessCoordinatorAuthority
+} from '../../orchestration/headless-coordinator'
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean, OptionalString, requiredString } from '../schemas'
@@ -27,6 +33,23 @@ const RunListParams = z.object({
 })
 const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
 
+// Why defensive: the dispatcher gate already refused an unverified headless caller; a handler
+// reached some other way must not create or bind a headless Run without that proof.
+function requireVerifiedHeadless(
+  from: string,
+  authority: HeadlessCoordinatorAuthority | undefined
+): HeadlessCoordinatorAuthority | undefined {
+  if (!isHeadlessHandle(from)) {
+    return undefined
+  }
+  if (authority?.handle !== from) {
+    throw new OrchestrationError(COORDINATOR_AUTH_FAILED, 'Headless coordinator not verified.', {
+      effectsApplied: false
+    })
+  }
+  return authority
+}
+
 function requireCallerPane(
   runtime: OrcaRuntimeService,
   handle: string,
@@ -35,7 +58,7 @@ function requireCallerPane(
   const paneKey =
     callerAuthority?.terminalHandle === handle
       ? callerAuthority.paneKey
-      : runtime.getTerminalPaneKey(handle)
+      : resolveCallerPaneKey(runtime, handle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
@@ -49,15 +72,17 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, headlessCoordinator }) => {
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
+      const headless = requireVerifiedHeadless(params.from, headlessCoordinator)
       const paneKey = requireCallerPane(runtime, params.from)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
       const run = db.createRun({
         objective: params.objective,
         coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
+        coordinatorPaneKey: paneKey,
+        ...(headless ? { coordinatorTokenHash: headless.tokenHash } : {})
       })
       runtime.cancelMessageWaiters(params.from)
       if (priorRun) {
@@ -75,9 +100,11 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         runtime,
         legacyCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
-        orchestrationCompatibilityCallerAuthority: callerAuthority
+        orchestrationCompatibilityCallerAuthority: callerAuthority,
+        headlessCoordinator
       }
     ) => {
+      const headless = requireVerifiedHeadless(params.from, headlessCoordinator)
       const paneKey = requireCallerPane(runtime, params.from, callerAuthority)
       if (
         params.takeoverLegacy &&
@@ -96,6 +123,8 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         runId: params.id,
         coordinatorHandle: params.from,
         coordinatorPaneKey: paneKey,
+        // Why: a headless binding carries its (possibly rotated) hash; a terminal binding voids it.
+        coordinatorTokenHash: headless ? (headless.newTokenHash ?? headless.tokenHash) : null,
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
@@ -104,6 +133,10 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
           'run_not_found',
           `Run ${params.id} was not found or is inspect-only.`
         )
+      }
+      if (headless?.newTokenHash) {
+        // Why: an unchanged binding skips bindRun's update, so rotation is applied on its own.
+        db.rotateCoordinatorTokenHash(params.id, headless.newTokenHash)
       }
       runtime.cancelMessageWaiters(params.from)
       runtime.cancelMessageWaiters(`run:${params.id}`)

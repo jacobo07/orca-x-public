@@ -9,25 +9,55 @@ describe('task host placements', () => {
     db = new OrchestrationDb(':memory:')
     const a = db.createTask({ spec: 'job a' })
     const b = db.createTask({ spec: 'job b' })
-    db.recordTaskPlacement({ taskId: a.id, hostKey: 'fingerprint:fp-win', fingerprint: 'fp-win', address: 'local', label: 'laptop' })
-    db.recordTaskPlacement({ taskId: b.id, hostKey: 'fingerprint:fp-gex', fingerprint: 'fp-gex', address: 'gex44', label: 'gex44' })
+    db.recordTaskPlacement({
+      taskId: a.id,
+      hostKey: 'fingerprint:fp-win',
+      fingerprint: 'fp-win',
+      address: 'local',
+      label: 'laptop'
+    })
+    db.recordTaskPlacement({
+      taskId: b.id,
+      hostKey: 'fingerprint:fp-gex',
+      fingerprint: 'fp-gex',
+      address: 'gex44',
+      label: 'gex44'
+    })
     const rows = db.listRunTaskPlacements(a.run_id)
     expect(rows.map((r) => [r.task_id, r.fingerprint]).sort()).toEqual(
-      [[a.id, 'fp-win'], [b.id, 'fp-gex']].sort()
+      [
+        [a.id, 'fp-win'],
+        [b.id, 'fp-gex']
+      ].sort()
     )
-    db.recordTaskPlacement({ taskId: a.id, hostKey: 'fingerprint:fp-gex', fingerprint: 'fp-gex', address: 'gex44', label: 'gex44' })
-    expect(db.listRunTaskPlacements(a.run_id).find((r) => r.task_id === a.id)?.fingerprint).toBe('fp-gex')
+    db.recordTaskPlacement({
+      taskId: a.id,
+      hostKey: 'fingerprint:fp-gex',
+      fingerprint: 'fp-gex',
+      address: 'gex44',
+      label: 'gex44'
+    })
+    expect(db.listRunTaskPlacements(a.run_id).find((r) => r.task_id === a.id)?.fingerprint).toBe(
+      'fp-gex'
+    )
   })
 
   it('refuses to place a task that does not exist', () => {
     db = new OrchestrationDb(':memory:')
     expect(() =>
-      db.recordTaskPlacement({ taskId: 'nope', hostKey: 'k', fingerprint: 'f', address: 'a', label: 'l' })
+      db.recordTaskPlacement({
+        taskId: 'nope',
+        hostKey: 'k',
+        fingerprint: 'f',
+        address: 'a',
+        label: 'l'
+      })
     ).toThrow(/unknown task/)
   })
 
-  it('ships schema v34', () => {
+  it('ships task placements from schema v34 on', () => {
     db = new OrchestrationDb(':memory:')
-    expect(SCHEMA_VERSION).toBe(34)
+    // Why at least: later migrations (v35 headless coordinator token) keep the placements table.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(34)
   })
 })
