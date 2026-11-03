@@ -130,6 +130,7 @@ import {
 import { createHostOobProbe, defaultHostOobProbeDeps } from './runtime/host-oob-probe'
 import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
 import { formatWakeBrokerServeLine, startWakeBroker } from './runtime/wake-broker-host'
+import { observeOnlyMode } from './runtime/observe-only-mode'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -179,7 +180,8 @@ import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import {
   argvRequestsServeMode,
   normalizeServeModeArgv,
-  readServeBindHostArg
+  readServeBindHostArg,
+  readServeObserveOnlyArg
 } from './startup/serve-mode-argv'
 import { readLocalInterfaceAddresses, resolveServeBindPolicy } from './startup/serve-bind-policy'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
@@ -2030,6 +2032,7 @@ type ServeOptions = {
   // DWS-P2 (CTX-EXP-1): pins the WS listener host, outranking exposeNetworkByDefault.
   bindHost: string | null
   wakeBroker: boolean
+  observeOnly: boolean
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -2059,7 +2062,8 @@ function getServeOptions(argv = process.argv): ServeOptions {
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root'),
     bindHost: readServeBindHostArg(argv, '--serve-bind-host'),
-    wakeBroker: argv.includes('--serve-wake-broker')
+    wakeBroker: argv.includes('--serve-wake-broker'),
+    observeOnly: readServeObserveOnlyArg(argv)
   }
 }
 
@@ -3306,6 +3310,10 @@ void app.whenReady().then(async () => {
   }
   // Why: existing installs may have pairing creds under the late app.getPath('userData'); copy them forward before switching to the canonical path.
   migrateMobilePairingDataToCanonicalUserDataPath(app.getPath('userData'))
+  // Why before the server exists: no paired request may be served while the switch is still off.
+  if (serveOptions?.observeOnly) {
+    observeOnlyMode.enable()
+  }
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.

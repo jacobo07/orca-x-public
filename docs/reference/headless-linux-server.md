@@ -99,6 +99,18 @@ machine through an SSH forward, e.g.
 `ssh -N -L 127.0.0.1:6768:127.0.0.1:6768 <host>`, paired with
 `--pairing-address 127.0.0.1` so the offer advertises the forward's local end.
 
+`--observe-only` makes the server read-only for paired clients. They may call
+`status.get`, `diagnostics.memory`, `fleet.nodeResources`, `repo.list`,
+`worktree.list`, `terminal.list` and `orchestration.workerList`; every other
+method, including terminal creation, terminal output, git writes and worker
+attachment, is refused with `server_observe_only` before it reaches a handler.
+The server also stops advertising worker federation, so a home that tries
+`orchestration worker-start --on <this server>` fails with
+`capability_unsupported` and nothing is created here. Each refusal logs one
+line with the method name only (`[serve] observe-only refused method <name>`);
+read those lines to see what a client wanted. This host's own CLI and desktop
+are local callers and are not affected.
+
 The command writes one ready block to stdout after the listener bind and
 pairing initialization complete:
 

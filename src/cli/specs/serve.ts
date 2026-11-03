@@ -12,7 +12,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--wake-broker] [--json]',
+      'orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--wake-broker] [--observe-only] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
@@ -22,7 +22,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'no-pairing',
       'project-root',
       'recipe-json',
-      'wake-broker'
+      'wake-broker',
+      'observe-only'
     ],
     notes: [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
@@ -31,7 +32,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
-      '--wake-broker runs this host as a LAN Wake Broker for targets and grants registered with `orca wake`; off by default.'
+      '--wake-broker runs this host as a LAN Wake Broker for targets and grants registered with `orca wake`; off by default.',
+      '--observe-only lets paired clients read status, resources and repo/worktree/terminal/worker lists and refuses everything else (server_observe_only); it also stops advertising worker federation. The CLI and desktop on this host are unaffected.'
     ],
     examples: [
       'orca serve',

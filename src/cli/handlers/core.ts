@@ -107,6 +107,13 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatCliStatus)
   },
   serve: async ({ flags, json }) => {
+    // Why: a dropped value would start a fully open server, so only the bare switch is accepted.
+    if (flags.has('observe-only') && flags.get('observe-only') !== true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--observe-only takes no value; pass it bare.'
+      )
+    }
     if (flags.get('no-pairing') === true && flags.get('mobile-pairing') === true) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -147,7 +154,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       recipeJson: flags.get('recipe-json') === true,
       projectRoot,
       bindHost,
-      wakeBroker: flags.get('wake-broker') === true
+      wakeBroker: flags.get('wake-broker') === true,
+      observeOnly: flags.get('observe-only') === true
     })
     process.exitCode = exitCode
   },

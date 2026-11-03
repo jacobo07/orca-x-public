@@ -85,6 +85,7 @@ export function serveOrcaApp(
     projectRoot?: string | null
     bindHost?: string | null
     wakeBroker?: boolean
+    observeOnly?: boolean
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -113,6 +114,9 @@ export function serveOrcaApp(
   }
   if (args.wakeBroker) {
     childArgs.push('--serve-wake-broker')
+  }
+  if (args.observeOnly) {
+    childArgs.push('--serve-observe-only')
   }
   if (args.recipeJson) {
     if (!args.projectRoot) {

@@ -37,6 +37,13 @@ import {
 import { wakeDeviceState } from './wake-broker'
 import { dropWakeGrantsAfterRevoke, wakeBrokerHost } from './wake-broker-host'
 import {
+  formatObserveOnlyRefusalLine,
+  isMethodAllowedWhileObserveOnly,
+  OBSERVE_ONLY_REFUSED_CODE,
+  observeOnlyMode,
+  observeOnlyRefusalMessage
+} from './observe-only-mode'
+import {
   E2EEKeypairUnreadableError,
   E2EEKeypairUnusableError,
   loadOrCreateE2EEKeypair,
@@ -1798,6 +1805,22 @@ export class OrcaRuntimeRpcServer {
       return
     }
     const device = authorization.device
+    // Why here: every paired request (direct WebSocket and relay) passes this point before the
+    // dispatcher's legacy routing and the mutation receipt; binary frames only reach handlers
+    // that an allowed streaming method registered.
+    if (observeOnlyMode.isEnabled() && !isMethodAllowedWhileObserveOnly(request.method)) {
+      console.warn(formatObserveOnlyRefusalLine(request.method))
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            OBSERVE_ONLY_REFUSED_CODE,
+            observeOnlyRefusalMessage(request.method)
+          )
+        )
+      )
+      return
+    }
     if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
       reply(
         JSON.stringify(

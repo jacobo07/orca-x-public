@@ -271,7 +271,9 @@ function isKnownRemoteStartFailure(code: string): boolean {
     'agent_unconfigured',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',
-    'capability_unsupported'
+    'capability_unsupported',
+    // Why: a worker server started with --observe-only refuses before any effect.
+    'server_observe_only'
   ].includes(code)
 }
 

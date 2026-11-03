@@ -70,7 +70,9 @@ describe('orca cli worktree awareness', () => {
       mobilePairing: false,
       recipeJson: false,
       projectRoot: null,
-      bindHost: null
+      bindHost: null,
+      wakeBroker: false,
+      observeOnly: false
     })
   })
 
@@ -99,8 +101,28 @@ describe('orca cli worktree awareness', () => {
       mobilePairing: false,
       recipeJson: false,
       projectRoot: null,
-      bindHost: '127.0.0.1'
+      bindHost: '127.0.0.1',
+      wakeBroker: false,
+      observeOnly: false
     })
+  })
+
+  it('passes --observe-only through to the foreground server', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--observe-only', '--no-pairing', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({ observeOnly: true, noPairing: true })
+    )
+  })
+
+  it('refuses --observe-only with a value rather than serving without it', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--observe-only=true', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
   })
 
   it('starts a foreground headless server with mobile pairing enabled', async () => {
@@ -119,7 +141,9 @@ describe('orca cli worktree awareness', () => {
       mobilePairing: true,
       recipeJson: false,
       projectRoot: null,
-      bindHost: null
+      bindHost: null,
+      wakeBroker: false,
+      observeOnly: false
     })
   })
 
@@ -146,7 +170,9 @@ describe('orca cli worktree awareness', () => {
       mobilePairing: false,
       recipeJson: true,
       projectRoot: '/workspace/repo',
-      bindHost: null
+      bindHost: null,
+      wakeBroker: false,
+      observeOnly: false
     })
   })
 

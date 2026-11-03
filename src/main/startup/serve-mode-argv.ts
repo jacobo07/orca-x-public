@@ -15,7 +15,8 @@ const CLI_TO_SERVE_FLAG = new Map([
   ['--no-pairing', '--serve-no-pairing'],
   ['--mobile-pairing', '--serve-mobile-pairing'],
   ['--recipe-json', '--serve-recipe-json'],
-  ['--wake-broker', '--serve-wake-broker']
+  ['--wake-broker', '--serve-wake-broker'],
+  ['--observe-only', '--serve-observe-only']
 ])
 
 const CLI_TO_SERVE_VALUE_FLAG = new Map([
@@ -82,6 +83,20 @@ export function readServeBindHostArg(
     throw new Error('Missing value for --serve-bind-host.')
   }
   return parseServeBindHost(raw)
+}
+
+/**
+ * Read the observe-only switch. Why strict: for this flag a dropped value fails open (the server
+ * starts with full paired access), so `--observe-only=<anything>` is refused, never ignored.
+ */
+export function readServeObserveOnlyArg(argv: readonly string[]): boolean {
+  const valued = argv.find(
+    (token) => token.startsWith('--observe-only=') || token.startsWith('--serve-observe-only=')
+  )
+  if (valued !== undefined) {
+    throw new Error('--observe-only takes no value; pass it bare.')
+  }
+  return argv.includes('--serve-observe-only')
 }
 
 // Why: a CLI-form `serve` is not a serve launch when help was asked for. The AppImage redirect

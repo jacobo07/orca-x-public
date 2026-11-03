@@ -34,9 +34,15 @@ RPC, PTY, orchestration or serve.
   fleet observation (`main/fleet/fleet-observation-service.ts`: `status.get`, `diagnostics.memory`,
   `fleet.nodeResources`); (2) the Sidecar F1 reads (worktree/repo/terminal lists, `orchestration.workerList`);
   (3) opening the host in the desktop app through the shared-control path
-  (`main/ipc/runtime-environment-transport-routing.ts:145-160`). The trace and the resulting list are committed with
-  the change. Terminal *output* reads and every create/send/stop/attach are outside it. Refusal code:
-  `server_observe_only`.
+  (`main/ipc/runtime-environment-transport-routing.ts:145-160`). Terminal *output* reads and every
+  create/send/stop/attach are outside it. Refusal code: `server_observe_only`.
+  *As built (r3):* the list is seeded from the consumers' own call sites (fleet observation; the CLI list handlers
+  the Sidecar runs: `repo.list`, `worktree.list`, `terminal.list`, `orchestration.workerList`). The trace is the
+  refusal log itself: every refusal prints one line with the method name only
+  (`[serve] observe-only refused method <name>`). At the gex44 drill, before prod, the three consumers run against an
+  observe-only server and every refused read they need is either added (reads only) or recorded as deliberately
+  refused; the desktop's terminal streaming and subscriptions stay refused unless the trace shows a read the Owner
+  needs.
 - **Capability.** An observe-only server withholds the worker-federation capability in `status.get`, so the home's
   existing preflight (`rpc/methods/orchestration-federated-worker-start.ts` ~64) refuses with `capability_unsupported`
   before any remote call, and the dispatch ends as **failed**, not unknown. `server_observe_only` is also added to the

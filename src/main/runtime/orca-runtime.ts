@@ -636,6 +636,7 @@ import {
   type RuntimeCapability
 } from '../../shared/protocol-version'
 import { wakeBrokerRuntimeCapabilities } from './wake-broker-host'
+import { withholdObserveOnlyCapabilities } from './observe-only-mode'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions
@@ -6019,7 +6020,7 @@ export class OrcaRuntimeService {
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       // Why: headless orca serve cannot create/stream BrowserViews, so clients
       // must not treat browser panes as supported just because runtime RPC is up.
-      capabilities,
+      capabilities: withholdObserveOnlyCapabilities(capabilities),
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
