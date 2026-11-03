@@ -204,6 +204,8 @@ describe('orchestration federation', () => {
     expect(workerDb.listTasks()).toHaveLength(0)
     const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
     expect([create.activate, create.runHooks]).toEqual([false, false])
+    // Why: the worker server tags the worker's startup terminal with the home's dispatch id (K2).
+    expect(create.startupEnv).toEqual({ ORCA_WORKER_DISPATCH_ID: dispatch.id })
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)

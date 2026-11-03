@@ -253,6 +253,10 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
+import {
+  enforceWorkerDispatchIdEnv,
+  WORKER_DISPATCH_ID_ENV
+} from '../runtime/orchestration/worker-dispatch-env'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -2581,6 +2585,8 @@ export function registerPtyHandlers(
         if (preAllocatedHandle) {
           env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
         }
+        // Why: only a dispatch id the runtime minted for a worker may reach the shell (K2).
+        enforceWorkerDispatchIdEnv(env)
         stampWslOrchestrationCompatibilityHost(
           env,
           runtime?.getOrchestrationCompatibilityHostId?.(),
@@ -4898,6 +4904,12 @@ export function registerPtyHandlers(
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
 
+      // Why here, after the last env rebuild: keep the worker tag only when the runtime minted it,
+      // and make a daemon or relay drop a copy it inherited from its own parent (K2).
+      if (env) {
+        env = { ...env }
+      }
+      const dropWorkerDispatchId = env ? enforceWorkerDispatchIdEnv(env) : true
       const authEnvToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
@@ -4933,7 +4945,8 @@ export function registerPtyHandlers(
         isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
         // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
-        getInheritedClaudeSessionStampEnvKeysToDelete(env)
+        getInheritedClaudeSessionStampEnvKeysToDelete(env),
+        dropWorkerDispatchId ? [WORKER_DISPATCH_ID_ENV] : []
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -6664,6 +6677,9 @@ export function registerPtyHandlers(
         const spawnEnv = preAllocatedHandle
           ? { ...env, ORCA_TERMINAL_HANDLE: preAllocatedHandle }
           : env
+        // Why: the daemon merges the env it inherited from its own parent; an untrusted or absent
+        // worker tag must also be deleted there, not only from this object (K2).
+        const dropWorkerDispatchId = spawnEnv ? enforceWorkerDispatchIdEnv(spawnEnv) : true
         const envToDelete = claudeAuth?.stripAuthEnv
           ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
           : undefined
@@ -6678,7 +6694,8 @@ export function registerPtyHandlers(
           skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
           // Why: the persistent daemon compares its own merged CODEX_HOME pair;
           // main cannot safely decide ownership for a process it may not parent.
-          stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+          stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : [],
+          dropWorkerDispatchId ? [WORKER_DISPATCH_ID_ENV] : []
         )
         if (codexResumeHomeSelected) {
           combinedEnvToDelete = removeCodexHomeDeletionRequests(combinedEnvToDelete)

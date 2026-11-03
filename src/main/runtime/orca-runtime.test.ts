@@ -6016,6 +6016,7 @@ describe('OrcaRuntimeService', () => {
         name: 'agent-feature',
         startupAgent: 'codex',
         startupPrompt: 'hi',
+        startupEnv: { ORCA_WORKER_DISPATCH_ID: 'ctx_startup_env' },
         activate: true
       })
 
@@ -6023,7 +6024,9 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({
           cwd: '/remote/agent-feature',
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
-          worktreeId: result.worktree.id
+          worktreeId: result.worktree.id,
+          // Why: startupEnv reaches the startup agent terminal (K2 worker tag).
+          env: expect.objectContaining({ ORCA_WORKER_DISPATCH_ID: 'ctx_startup_env' })
         })
       )
       expect(activateWorktree).toHaveBeenCalledWith(

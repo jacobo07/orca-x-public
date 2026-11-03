@@ -172,6 +172,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
             taskId: task.id,
+            dispatchId: started.dispatch.id,
             effects
           })
           terminalHandle = terminal.handle

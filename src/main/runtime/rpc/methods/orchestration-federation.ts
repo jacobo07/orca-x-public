@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { workerDispatchTerminalEnv } from '../../orchestration/worker-dispatch-env'
 import { defineMethod, type RpcMethod } from '../core'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import {
@@ -95,6 +96,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             createdWithAgent: agent as TuiAgent,
             startupAgent: agent as TuiAgent,
             ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
+            startupEnv: workerDispatchTerminalEnv(params.dispatchId),
             activate: false,
             lineage: { noParent: true }
           })
@@ -162,6 +164,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           } else {
             failedStage = 'terminal_create'
             const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
+              env: workerDispatchTerminalEnv(params.dispatchId),
               // Why: agent ids are not shell commands (`cursor` is the desktop app,
               // its CLI is `cursor-agent`); resolve through the TUI agent config.
               startupAgent: agent as TuiAgent,

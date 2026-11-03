@@ -94,6 +94,8 @@ describe('orchestration RPC methods', () => {
       // Why: dispatching a worker is background work — surfaceOwner:false adopts
       // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
+        // Why: the worker's terminal carries its dispatch id from the trusted creation path (K2).
+        env: { ORCA_WORKER_DISPATCH_ID: result.dispatchId },
         startupAgent: 'codex',
         title: `worker-${task.id}`,
         surfaceOwner: false
@@ -285,6 +287,9 @@ describe('orchestration RPC methods', () => {
         // away from whatever the user is looking at.
         expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
       )
+      expect(vi.mocked(runtime.createTerminal).mock.calls.at(-1)?.[1]?.env).toEqual({
+        ORCA_WORKER_DISPATCH_ID: (result as unknown as { dispatchId: string }).dispatchId
+      })
       expect(createWorktree).not.toHaveBeenCalled()
       expect(runtime.showTerminal).toHaveBeenCalledWith('term_coord')
       expect(runtime.showManagedWorktree).not.toHaveBeenCalledWith(
@@ -506,6 +511,9 @@ describe('orchestration RPC methods', () => {
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })
       )
+      expect(create.mock.calls[0]?.[0].startupEnv).toEqual({
+        ORCA_WORKER_DISPATCH_ID: (result as unknown as { dispatchId: string }).dispatchId
+      })
       expect(result.effects).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ role: 'agent', action: 'reused_agent_terminal' }),

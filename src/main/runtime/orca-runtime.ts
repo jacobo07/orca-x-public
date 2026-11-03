@@ -23561,6 +23561,8 @@ export class OrcaRuntimeService {
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupLaunchPreferences?: AgentLaunchPreferences
+    // Why: extra env for the startup agent terminal only (the worker dispatch tag, K2).
+    startupEnv?: Record<string, string>
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
@@ -23605,7 +23607,11 @@ export class OrcaRuntimeService {
       !args.startup && !agentStartup && args.startupDraft
         ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
         : null
-    const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const baseStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const effectiveStartup =
+      baseStartup && args.startupEnv
+        ? { ...baseStartup, env: { ...baseStartup.env, ...args.startupEnv } }
+        : baseStartup
     const effectiveStartupFollowup = agentStartup?.followup
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent

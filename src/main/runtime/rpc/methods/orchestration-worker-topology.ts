@@ -2,6 +2,7 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { workerDispatchTerminalEnv } from '../../orchestration/worker-dispatch-env'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -59,9 +60,11 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
   taskId: string
+  dispatchId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+    env: workerDispatchTerminalEnv(args.dispatchId),
     // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
     // configured launcher instead of executing the raw id.
@@ -144,6 +147,7 @@ export async function createWorkerWorktree(args: {
     createdWithAgent: args.agent,
     startupAgent: args.agent,
     ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+    startupEnv: workerDispatchTerminalEnv(dispatchId),
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,

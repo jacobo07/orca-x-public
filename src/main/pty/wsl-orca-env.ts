@@ -75,6 +75,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    'ORCA_WORKER_DISPATCH_ID/u',
     'ORCA_USER_DATA_PATH/p',
     'ORCA_CLI_COMMAND/u',
     'ORCA_PANE_KEY/u',
