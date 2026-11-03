@@ -1,4 +1,5 @@
-import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
+import { isHeadlessHandle, resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
+import { assertHeadlessWorkerStartPlacement } from './orchestration-worker-start-headless'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { assertWorkerStartMatchesPlacement } from '../../orchestration/mission-dispatch-placement'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
@@ -44,6 +45,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+      assertHeadlessWorkerStartPlacement(params)
       const placement = db.getTaskPlacement(task.id)
       if (placement) {
         assertWorkerStartMatchesPlacement(
@@ -68,22 +70,30 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
       const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
-      const coordinatorTerminal = await runtime.showTerminal(params.from)
-      const creationWorktree = createsWorktree
-        ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
-        : undefined
-      if (creationWorktree) {
+      // Why: a headless coordinator has no terminal. Its placement was checked above and never
+      // refers to a coordinator worktree (new-top-level carries an exact --repo).
+      const coordinatorTerminal = isHeadlessHandle(params.from)
+        ? undefined
+        : await runtime.showTerminal(params.from)
+      const creationWorktree =
+        createsWorktree && coordinatorTerminal
+          ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
+          : undefined
+      const creationRepo = params.repo ?? creationWorktree?.repoId
+      if (createsWorktree && creationRepo) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
-          repoSelector: params.repo ?? creationWorktree.repoId,
+          repoSelector: creationRepo,
           existingPlacement: 'current or an exact existing folder workspace'
         })
       }
-      let resolvedWorktree = creationWorktree
+      let resolvedWorktree = createsWorktree
         ? undefined
-        : requestedWorktree === 'current'
-          ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
-          : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+        : await runtime.showManagedTerminalWorkspace(
+            requestedWorktree === 'current'
+              ? `id:${coordinatorTerminal!.worktreeId}`
+              : requestedWorktree
+          )
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)
@@ -105,7 +115,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         worktree: requestedWorktree,
         resolvedWorktreeId: resolvedWorktree?.id ?? null,
         name: params.name ?? null,
-        repo: params.repo ?? creationWorktree?.repoId ?? null,
+        repo: creationRepo ?? null,
         baseBranch: params.baseBranch ?? null,
         terminal: params.terminal ?? null,
         agent: agent ?? null,
@@ -144,7 +154,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         state: 'not_applicable'
       }
       try {
-        if (creationWorktree) {
+        if (createsWorktree) {
           failedStage = 'worktree_create'
           const created = await createWorkerWorktree({
             runtime,

@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
+import { isHeadlessHandle } from './headless-coordinator'
 
 export type PreambleParams = {
   taskId: string
@@ -57,8 +58,13 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
 
+  // Why: a headless coordinator (K4) has no terminal; calling its handle a terminal handle would
+  // send the worker looking for a pane that does not exist.
+  const coordinatorLine = isHeadlessHandle(params.coordinatorHandle)
+    ? `Your coordinator is a headless coordinator with no terminal: ${params.coordinatorHandle}`
+    : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: ${params.coordinatorHandle}
+${coordinatorLine}
 Your task ID is: ${params.taskId}
 
 You talk to the coordinator only through the CLI commands below. Do not use

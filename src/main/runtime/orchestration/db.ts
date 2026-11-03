@@ -4377,10 +4377,17 @@ export class OrchestrationDb {
       .run(...ids)
   }
 
+  // Why the filter: this unscoped listing carries no caller identity, so it must not show the mail of
+  // a Run owned by a headless coordinator (K4); that coordinator reads it with its own handle.
   getInbox(limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
       this.db
-        .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
+        .prepare(
+          `SELECT * FROM messages
+           WHERE run_id IS NULL
+              OR run_id NOT IN (SELECT id FROM runs WHERE coordinator_token_hash IS NOT NULL)
+           ORDER BY sequence DESC LIMIT ?`
+        )
         .all(limit) as MessageRow[]
     )
   }

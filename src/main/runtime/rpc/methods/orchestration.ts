@@ -1,5 +1,8 @@
 /* eslint-disable max-lines -- Why: RPC method definitions co-locate param schemas with handlers; splitting by method would scatter the shared enums and Zod transforms without reducing complexity. */
-import { resolveCallerPaneKey } from '../../orchestration/headless-coordinator'
+import {
+  assertCoordinatorMailboxReply,
+  resolveCallerPaneKey
+} from '../../orchestration/headless-coordinator'
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { defineMethod, type RpcMethod } from '../core'
@@ -1217,7 +1220,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: ReplyParams,
     handler: async (
       params,
-      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
+      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId, headlessCoordinator }
     ) => {
       const db = runtime.getOrchestrationDb()
       const original = db.getMessageById(params.id)
@@ -1247,6 +1250,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
+      // Why: replying marks the original read; a headless coordinator's mail is its own (K4).
+      assertCoordinatorMailboxReply(db, original.to_handle, headlessCoordinator)
       const question = db.getQuestion(params.id)
       if (question) {
         const run = resolveRunScope(runtime, {

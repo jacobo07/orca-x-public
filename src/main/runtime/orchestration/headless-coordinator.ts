@@ -182,6 +182,34 @@ function refuseTokenGuardedRuns(db: OrchestrationDb, runIds: readonly string[]):
 }
 
 /**
+ * A message addressed to a headless coordinator (its `run:<id>` mailbox or its `headless:` handle)
+ * may be replied to, and so marked read, only by that coordinator. Messages addressed to anyone
+ * else keep their existing rules, so a worker can still reply to what its coordinator sent it.
+ */
+export function assertCoordinatorMailboxReply(
+  db: OrchestrationDb,
+  toHandle: string,
+  authority: HeadlessCoordinatorAuthority | undefined
+): void {
+  // Why not isHeadlessHandle: its type guard would narrow the string branch below to never.
+  if (toHandle.startsWith(HEADLESS_HANDLE_PREFIX)) {
+    if (authority?.handle !== toHandle) {
+      throw authFailed(`Only ${toHandle} may reply to its own mail.`)
+    }
+    return
+  }
+  if (!toHandle.startsWith('run:')) {
+    return
+  }
+  const stored = db.getCoordinatorTokenHash(toHandle.slice('run:'.length))
+  if (stored !== null && !(authority && hashesEqual(stored, authority.tokenHash))) {
+    throw authFailed(
+      `${toHandle} belongs to a headless coordinator; only its token holder may reply.`
+    )
+  }
+}
+
+/**
  * The pane key of whoever is calling. A headless handle is its own synthetic key; anything else is a
  * terminal. Safe to trust a headless value here only because the dispatcher's gate verified it.
  */

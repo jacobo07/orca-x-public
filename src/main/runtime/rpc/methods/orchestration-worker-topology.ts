@@ -2,6 +2,8 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { isHeadlessHandle } from '../../orchestration/headless-coordinator'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { workerDispatchTerminalEnv } from '../../orchestration/worker-dispatch-env'
 
 export type WorkerEffect = {
@@ -112,7 +114,8 @@ export async function createWorkerWorktree(args: {
   db: OrchestrationDb
   dispatchId: string
   requestedWorktree: string
-  coordinatorWorktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
+  // Why optional: a headless coordinator (K4) has no worktree; it always names an exact --repo.
+  coordinatorWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   params: {
     repo?: string
     name?: string
@@ -132,9 +135,16 @@ export async function createWorkerWorktree(args: {
 }> {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  const repoSelector = params.repo ?? coordinatorWorktree?.repoId
+  if (!repoSelector || (requestedWorktree === 'new-child' && !coordinatorWorktree)) {
+    throw new OrchestrationError(
+      'headless_coordinator_has_no_worktree',
+      'Worktree creation needs an exact --repo when the coordinator has no worktree.'
+    )
+  }
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
-    repoSelector: params.repo ?? coordinatorWorktree.repoId,
+    repoSelector,
     name: params.name as string,
     baseBranch: params.baseBranch,
     displayName: params.displayName,
@@ -150,9 +160,10 @@ export async function createWorkerWorktree(args: {
     startupEnv: workerDispatchTerminalEnv(dispatchId),
     activate: false,
     lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
+      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree?.id : undefined,
       noParent: requestedWorktree === 'new-top-level',
-      callerTerminalHandle: params.from
+      // Why: lineage records a caller terminal; a headless coordinator is not one (K4).
+      callerTerminalHandle: isHeadlessHandle(params.from) ? undefined : params.from
     }
   })
   const terminalHandle = created.startupTerminal?.handle
