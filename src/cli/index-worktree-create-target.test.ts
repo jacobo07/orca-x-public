@@ -269,6 +269,33 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('sends no caller terminal from a headless coordinator (K4b)', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
+    process.env.ORCA_HEADLESS_COORDINATOR = 'sidecar'
+    process.env.ORCA_HEADLESS_COORDINATOR_TOKEN = 'c'.repeat(64)
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
+      '/tmp/repo'
+    )
+
+    const create = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
+    expect(create?.[1]).toMatchObject({ callerTerminalHandle: undefined })
+    expect(JSON.stringify(callMock.mock.calls)).not.toContain('headless:')
+    expect(JSON.stringify(callMock.mock.calls)).not.toContain('term_parent')
+  })
+
   it('marks every worktree.create as CLI-created even from an external shell', async () => {
     // Why: the sidebar badge/filter must catch hand-typed creates too, so the
     // provenance request is sent with no terminal handle rather than omitted.

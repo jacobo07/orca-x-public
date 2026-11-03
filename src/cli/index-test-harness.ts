@@ -104,6 +104,10 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
     // Isolate the pane key so claude-teams tests that set it don't leak a
     // senderPaneKey into later orchestration.send assertions.
     delete process.env.ORCA_PANE_KEY
+    // Why: a test that turns on headless coordinator mode must not leak it into the next one.
+    delete process.env.ORCA_HEADLESS_COORDINATOR
+    delete process.env.ORCA_HEADLESS_COORDINATOR_TOKEN
+    delete process.env.ORCA_HEADLESS_COORDINATOR_NEW_TOKEN
     mocks.serveOrcaAppMock.mockReset()
     mocks.getDefaultUserDataPathMock.mockClear()
     mocks.addEnvironmentFromPairingCodeMock.mockReset()

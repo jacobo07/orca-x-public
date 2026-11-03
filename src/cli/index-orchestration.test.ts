@@ -221,6 +221,45 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('speaks only as the headless coordinator when that mode is on (K4b)', async () => {
+    // Why these: a Sidecar started from inside an Orca terminal inherits that terminal's identity.
+    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
+    process.env.ORCA_PANE_KEY = 'tab_parent:11111111-1111-4111-8111-111111111111'
+    process.env.ORCA_HEADLESS_COORDINATOR = 'sidecar'
+    process.env.ORCA_HEADLESS_COORDINATOR_TOKEN = 'b'.repeat(64)
+    const ok = {
+      id: 'req',
+      ok: true,
+      result: { task: { id: 't', status: 'ready' }, run: { id: 'run_1' } },
+      _meta: {}
+    }
+    // Why: the real runtime refuses terminal.show for a headless handle (no token on non-orchestration
+    // methods). A CLI that probes liveness first would abort every coordinator command.
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'terminal.show') {
+        throw Object.assign(new Error('refused'), { code: 'coordinator_auth_failed' })
+      }
+      return ok
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['orchestration', 'run-create', '--objective', 'Sidecar'], '/tmp/repo')
+    await main(['orchestration', 'task-create', '--spec', 'work'], '/tmp/repo')
+    await main(['orchestration', 'check'], '/tmp/repo')
+
+    const runCreate = callMock.mock.calls.find((call) => call[0] === 'orchestration.runCreate')
+    const create = callMock.mock.calls.find((call) => call[0] === 'orchestration.taskCreate')
+    const check = callMock.mock.calls.find((call) => call[0] === 'orchestration.check')
+    expect(callMock.mock.calls.some((call) => call[0] === 'terminal.show')).toBe(false)
+    expect(runCreate?.[1]).toMatchObject({ from: 'headless:sidecar' })
+    expect(create?.[1]).toMatchObject({ callerTerminalHandle: 'headless:sidecar' })
+    expect(check?.[1]).toMatchObject({ terminal: 'headless:sidecar' })
+    expect(check?.[1]).not.toHaveProperty('terminalPaneKey', expect.anything())
+    expect(JSON.stringify(callMock.mock.calls)).not.toContain('term_parent')
+    expect(JSON.stringify(callMock.mock.calls)).not.toContain('b'.repeat(64))
+  })
+
   it('sends the same task-create request for --spec-file as for --spec (K3)', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
     const text = 'Fix the login\n\n- step 1: add the test\n- step 2: añade ✓\n'

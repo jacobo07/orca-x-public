@@ -81,6 +81,9 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationRequestId?: string
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why: a headless coordinator's proof; sent only over this host's local socket (K4).
+  orchestrationCoordinatorToken?: string
+  orchestrationNewCoordinatorToken?: string
 }
 
 export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>

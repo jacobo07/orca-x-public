@@ -190,7 +190,9 @@ export async function sendRequest<TResult>(
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          orchestrationCoordinatorToken: envelope?.orchestrationCoordinatorToken,
+          orchestrationNewCoordinatorToken: envelope?.orchestrationNewCoordinatorToken
         })}\n`
       )
     })

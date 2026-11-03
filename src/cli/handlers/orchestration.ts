@@ -36,6 +36,7 @@ import {
 } from '../../shared/orchestration-check-output'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 import { resolveTaskSpec } from '../task-spec-file'
+import { isHeadlessCoordinatorHandle } from '../runtime/headless-coordinator-env'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -222,7 +223,13 @@ async function resolveOrchestrationTerminalHandle(
   }
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
-    if (flagName === 'from' && options.validateEnvHandle) {
+    // Why skip for headless: it is not a terminal, terminal.show cannot know it, and the runtime's
+    // token gate (not a liveness probe) is what proves this identity (K4).
+    if (
+      flagName === 'from' &&
+      options.validateEnvHandle &&
+      !isHeadlessCoordinatorHandle(envHandle)
+    ) {
       // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {

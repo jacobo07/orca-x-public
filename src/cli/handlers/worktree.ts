@@ -1,3 +1,4 @@
+import { isHeadlessCoordinatorHandle } from '../runtime/headless-coordinator-env'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -198,9 +199,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree create': async ({ flags, client, cwd, json }) => {
     assertCreateParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    // Why not headless: a headless coordinator has no terminal to record as the creator (K4).
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
-      process.env.ORCA_TERMINAL_HANDLE.length > 0
+      process.env.ORCA_TERMINAL_HANDLE.length > 0 &&
+      !isHeadlessCoordinatorHandle(process.env.ORCA_TERMINAL_HANDLE)
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)

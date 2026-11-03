@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { applyHeadlessCoordinatorEnv } from './runtime/headless-coordinator-env'
 import {
   findCommandSpec,
   isCommandGroup,
@@ -54,6 +55,8 @@ export async function main(
   argv = process.argv.slice(2),
   cwd = resolveInvocationCwd()
 ): Promise<void> {
+  // Why first: every handler and the client envelope read identity from env (K4 headless mode).
+  applyHeadlessCoordinatorEnv(process.env)
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
