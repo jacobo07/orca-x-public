@@ -2063,7 +2063,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     projectRoot: valueAfter('--serve-project-root'),
     bindHost: readServeBindHostArg(argv, '--serve-bind-host'),
     wakeBroker: argv.includes('--serve-wake-broker'),
-    observeOnly: readServeObserveOnlyArg(argv)
+    observeOnly: readServeObserveOnlyArg(argv, '--serve-observe-only')
   }
 }
 

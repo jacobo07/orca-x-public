@@ -89,14 +89,19 @@ export function readServeBindHostArg(
  * Read the observe-only switch. Why strict: for this flag a dropped value fails open (the server
  * starts with full paired access), so `--observe-only=<anything>` is refused, never ignored.
  */
-export function readServeObserveOnlyArg(argv: readonly string[]): boolean {
+export function readServeObserveOnlyArg(
+  argv: readonly string[],
+  // Why a parameter: getServeOptions names every --serve-* switch it reads at its own call site.
+  flag = '--serve-observe-only'
+): boolean {
+  const cliFlag = flag.replace('--serve-', '--')
   const valued = argv.find(
-    (token) => token.startsWith('--observe-only=') || token.startsWith('--serve-observe-only=')
+    (token) => token.startsWith(`${cliFlag}=`) || token.startsWith(`${flag}=`)
   )
   if (valued !== undefined) {
-    throw new Error('--observe-only takes no value; pass it bare.')
+    throw new Error(`${cliFlag} takes no value; pass it bare.`)
   }
-  return argv.includes('--serve-observe-only')
+  return argv.includes(flag)
 }
 
 // Why: a CLI-form `serve` is not a serve launch when help was asked for. The AppImage redirect
