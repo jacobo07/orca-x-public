@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one table of every orchestration command spec; splitting it by verb would scatter the help surface without reducing complexity. */
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
@@ -128,10 +129,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--assignee-agent <agent_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-create (--spec <text> | --spec-file <path>) [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--assignee-agent <agent_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
+      'spec-file',
       'task-title',
       'display-name',
       'deps',
@@ -140,6 +142,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'assignee-agent',
       'from',
       'retry-request'
+    ],
+    notes: [
+      '--spec-file reads the task text from a UTF-8 file (no byte-order mark, at most 256 KiB) and sends exactly the same request as --spec with that text; newlines are kept. The text is never printed. The caller owns and deletes the file.'
     ]
   },
   {

@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 const {
@@ -201,7 +204,14 @@ describe('orca cli worktree awareness', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      ['orchestration', 'task-create', '--spec', 'review the fix', '--assignee-agent', 'agent_keos'],
+      [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'review the fix',
+        '--assignee-agent',
+        'agent_keos'
+      ],
       '/tmp/repo'
     )
 
@@ -209,6 +219,51 @@ describe('orca cli worktree awareness', () => {
       'orchestration.taskCreate',
       expect.objectContaining({ spec: 'review the fix', assigneeAgent: 'agent_keos' })
     )
+  })
+
+  it('sends the same task-create request for --spec-file as for --spec (K3)', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    const text = 'Fix the login\n\n- step 1: add the test\n- step 2: añade ✓\n'
+    const dir = mkdtempSync(join(tmpdir(), 'orca-cli-spec-file-'))
+    const path = join(dir, 'task.md')
+    writeFileSync(path, text)
+    const ok = { id: 'req', ok: true, result: { task: { id: 't', status: 'ready' } }, _meta: {} }
+    callMock.mockResolvedValueOnce(ok).mockResolvedValueOnce(ok)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'task-create', '--spec', text, '--retry-request', 'same-request'],
+      '/tmp/repo'
+    )
+    await main(
+      ['orchestration', 'task-create', '--spec-file', path, '--retry-request', 'same-request'],
+      '/tmp/repo'
+    )
+
+    const creates = callMock.mock.calls.filter((call) => call[0] === 'orchestration.taskCreate')
+    expect(creates).toHaveLength(2)
+    const [byFlag, byFile] = creates
+    expect(byFile).toEqual(byFlag)
+    expect(byFile[1]).toMatchObject({ spec: text })
+    expect(JSON.stringify(byFile)).not.toContain(path)
+    // Why: the text is never echoed to the terminal.
+    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('step 1')
+  })
+
+  it('refuses a bad --spec-file before any runtime call (K3)', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    const dir = mkdtempSync(join(tmpdir(), 'orca-cli-spec-file-'))
+    const path = join(dir, 'bom.md')
+    writeFileSync(path, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('x')]))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['orchestration', 'task-create', '--spec-file', path], '/tmp/repo')
+    await main(['orchestration', 'task-create', '--spec', 'x', '--spec-file', path], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
   })
 
   it('passes dev mode to injected orchestration dispatches', async () => {

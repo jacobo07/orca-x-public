@@ -35,6 +35,7 @@ import {
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
+import { resolveTaskSpec } from '../task-spec-file'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -761,13 +762,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-create': async ({ flags, client, cwd, json }) => {
+    // Why first: a bad --spec-file must fail before any identity lookup or RPC.
+    const spec = resolveTaskSpec(flags)
     const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await callMutation<{ task: { id: string; status: string } }>(
       client,
       flags,
       'orchestration.taskCreate',
       {
-        spec: getRequiredStringFlag(flags, 'spec'),
+        spec,
         taskTitle: getOptionalStringFlag(flags, 'task-title'),
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
@@ -806,21 +809,37 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration review-show': async ({ flags, client, json }) => {
     const result = await client.call<{
-      review: { id: string; status: string; subject_revision: string; independence: string; reviewer_provider: string | null }
-      findings: { kind: string; verdict?: string; blocking?: boolean; findings?: { severity: string; summary: string; location?: string }[]; reason?: string; problem?: string } | null
+      review: {
+        id: string
+        status: string
+        subject_revision: string
+        independence: string
+        reviewer_provider: string | null
+      }
+      findings: {
+        kind: string
+        verdict?: string
+        blocking?: boolean
+        findings?: { severity: string; summary: string; location?: string }[]
+        reason?: string
+        problem?: string
+      } | null
       currency: { current: boolean; reason?: string }
     }>('orchestration.reviewShow', { id: getRequiredStringFlag(flags, 'id') })
     printResult(result, json, (r) => {
       const lines = [
-        `${r.review.id} ${r.review.status} — ${r.review.subject_revision.slice(0, 12)}, independence ${r.review.independence}` +
-          (r.review.reviewer_provider ? ` (reviewed on ${r.review.reviewer_provider})` : ''),
-        r.currency.current ? 'Current: the worktree still holds this commit.' : `Not current: ${r.currency.reason}.`
+        `${r.review.id} ${r.review.status} — ${r.review.subject_revision.slice(0, 12)}, independence ${r.review.independence}${r.review.reviewer_provider ? ` (reviewed on ${r.review.reviewer_provider})` : ''}`,
+        r.currency.current
+          ? 'Current: the worktree still holds this commit.'
+          : `Not current: ${r.currency.reason}.`
       ]
       const f = r.findings
       if (f?.kind === 'structured') {
         lines.push(`Verdict: ${f.verdict}${f.blocking ? ' (blocking)' : ''}`)
         for (const finding of f.findings ?? []) {
-          lines.push(`  [${finding.severity}] ${finding.summary}${finding.location ? ` (${finding.location})` : ''}`)
+          lines.push(
+            `  [${finding.severity}] ${finding.summary}${finding.location ? ` (${finding.location})` : ''}`
+          )
         }
       } else if (f?.kind === 'unstructured') {
         lines.push(`No structured verdict: ${f.problem}.`)
