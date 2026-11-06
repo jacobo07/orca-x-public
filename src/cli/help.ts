@@ -104,6 +104,7 @@ Terminals:
   terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
+  workspace placements      List worktrees with their logical workspace id and source revision
   orchestration run-create  Create and bind a lightweight orchestration Run
   orchestration run-use     Bind this coordinator terminal to an existing Run
   orchestration run-reset-coordinator Give a headless Run a new coordinator (desktop approval)

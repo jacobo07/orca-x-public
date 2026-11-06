@@ -151,8 +151,12 @@ export const HOST_AVAILABILITY_RUNTIME_CAPABILITY = 'host.availability.v1' as co
 // Why not in RUNTIME_CAPABILITIES: advertised only while this host runs as a broker, so a client knows a broker announced it this session (D-12, D-13).
 export const HOST_WAKE_BROKER_RUNTIME_CAPABILITY = 'host.wake-broker.v1' as const
 
+// Why a capability: Live QA must tell a host without this read from a host with no worktrees.
+export const WORKSPACE_PLACEMENTS_RUNTIME_CAPABILITY = 'workspace.placements.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
+  WORKSPACE_PLACEMENTS_RUNTIME_CAPABILITY,
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,

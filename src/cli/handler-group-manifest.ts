@@ -104,6 +104,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: [
       'worktree ps',
       'worktree list',
+      'workspace placements',
       'worktree show',
       'worktree current',
       'worktree create',

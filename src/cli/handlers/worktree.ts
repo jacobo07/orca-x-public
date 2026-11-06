@@ -184,6 +184,20 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatWorktreeList)
   },
+  'workspace placements': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      placements: { workspaceRef: string; lineageKey: string; path: string }[]
+      unavailable: { path: string; unavailable: string }[]
+      truncated: boolean
+    }>('workspace.placements', { repo: getOptionalStringFlag(flags, 'repo') })
+    printResult(result, json, (r) =>
+      [
+        ...r.placements.map((p) => `${p.workspaceRef} ${p.lineageKey} ${p.path}`),
+        ...r.unavailable.map((u) => `unavailable ${u.path}: ${u.unavailable}`),
+        ...(r.truncated ? ['More worktrees exist than this read covers.'] : [])
+      ].join('\n')
+    )
+  },
   'worktree show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)

@@ -21,6 +21,7 @@ export const OBSERVE_ONLY_RPC_METHOD_ALLOWLIST: ReadonlySet<string> = new Set([
   'fleet.nodeResources',
   'repo.list',
   'worktree.list',
+  'workspace.placements',
   'terminal.list',
   'orchestration.workerList'
 ])

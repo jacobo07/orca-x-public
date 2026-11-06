@@ -8,6 +8,7 @@ import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { PROJECT_REPLICA_COMMAND_SPECS } from './project-replica'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
+import { WORKSPACE_COMMAND_SPECS } from './workspace'
 import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
@@ -23,6 +24,7 @@ import { WAKE_COMMAND_SPECS } from './wake'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
+  ...WORKSPACE_COMMAND_SPECS,
   ...WAKE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,
   ...ACCOUNT_COMMAND_SPECS,
