@@ -1,7 +1,7 @@
 ---
 covers: [sidecar-dispatch, observe-only-server, worker-terminal-tag, task-spec-file, headless-coordinator]
 tier: T3
-status: draft r2 (2026-11-02; architecture audit r1 applied, 15 gaps)
+status: r3 (2026-11-06; K1-K4 built on spec/sidecar-dispatch; K4 as-built notes below)
 ---
 
 # Sidecar dispatch: four changes so an outside cockpit can send work through Orca
@@ -141,6 +141,30 @@ RPC, PTY, orchestration or serve.
    `ORCA_TERMINAL_HANDLE`, and never falls back to the focused terminal. Without it, behaviour is exactly today's.
 10. **Preamble.** Names `headless:<name>` as the coordinator (`orchestration/preamble.ts:61`); `worker_done` and
     `send --to headless:<name>` route to `run:<id>` through the existing trigger.
+
+### As built (r3)
+
+Where the code differs from the change list above, the code is the record:
+
+- **Tokens** ride on the RPC envelope (`orchestrationCoordinatorToken`, `orchestrationNewCoordinatorToken`), not in the
+  params, and the CLI takes the name from `ORCA_HEADLESS_COORDINATOR`, not a `--headless` flag on run-create or run-use.
+- **Change 7, reset.** `run-reset-coordinator` needs `ORCA_HEADLESS_COORDINATOR=<name>` matching `--headless` and the
+  new secret in `ORCA_HEADLESS_COORDINATOR_NEW_TOKEN`. The Owner approves in a dialog installed only by the desktop
+  app; serve, or a desktop with no visible window, answers `confirmation_unavailable`. A name another Run holds is
+  refused. The receipt payload hash covers the replacement's hash, so a retry with a different secret is
+  `request_mismatch`.
+- **Change 7, abandon stops nothing.** `run-abandon` releases live Dispatches and unbinds the coordinator but stops no
+  process: worker terminals stay open and are listed. This narrows "stops and releases" on purpose, matching
+  `worker-abandon`; the holder of the Run's token needs no dialog, anyone else does.
+- **Abandon keeps the token hash**, so an abandoned Run's mailbox stays guarded. The old token can therefore still
+  `run-use` that Run. After a leak, use `run-reset-coordinator`, which voids it.
+- **Both verbs** apply to headless Runs only, and are refused for paired callers (`remote_caller_refused`) and through
+  the SSH relay (`unsupported_over_ssh`). They are long-polls: the socket stays open while the Owner decides, the
+  dialog closes after 4 minutes or when the caller disconnects, and a Yes after that acts on nothing.
+- **Run events** are `audit_only` messages from `orca:run-recovery`, returned as `events` by `run-show`. There is no
+  event table.
+- **Change 8** is wider than its wording: `--on` also works with an exact remote worktree, not only with
+  `new-top-level`.
 
 ### Tests
 
