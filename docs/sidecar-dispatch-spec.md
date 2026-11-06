@@ -184,6 +184,21 @@ for `terminalPaneKey` → its test fails.
 The gate decision verb for subject-bound gates (InfinityOps F3) gets its own spec. No change here alters how a
 terminal coordinator works today; the existing `--from` impersonation for terminal runs is recorded debt.
 
+## K5 — pairing without copied codes (added 2026-11-06, Owner go)
+
+A power cut on 2026-11-03 zero-filled `orca-environments.json` on one PC and lost every saved pairing. Recovering means
+copying a new code per host by hand, and no host can issue one without a restart or the desktop screen.
+
+- **K5a (built):** the store is written durably, with a `.bak` of the same new state; bytes that are not JSON, or a
+  missing primary, restore from the backup and keep a `.corrupt-<ts>` copy. Anything else refuses. Known gaps: the
+  re-parse that guards two processes restoring at once has no test, and `.corrupt-*` copies are never expired, so a
+  truncated file can keep a removed token.
+- **K5b:** `orca pairing create --name <n> --json`, local callers only, so a running host can issue an offer.
+- **K5c:** pending offers expire and are single-use. Today a pending token lives until it is used.
+- **K5d:** `orca environment enroll --name <n> --ssh <alias>` fetches an offer over SSH and saves it, with the code off
+  argv. It needs the same authority as `run-reset-coordinator` or an Owner-fixed host list: a worker runs as the Owner on
+  the PCs and must not be able to grant itself a host. vps-prod stays behind the Owner's confirmation.
+
 ## Rollout and rollback
 
 One build from this branch (rebased on main at merge time), deployed to all four hosts like the F0.5 rebuild in
