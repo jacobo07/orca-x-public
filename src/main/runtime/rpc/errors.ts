@@ -92,6 +92,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Why: a headless coordinator's missing or wrong token (K4); callers must see it, not runtime_error.
   'coordinator_auth_failed',
   'headless_coordinator_has_no_worktree',
+  'confirmation_unavailable',
+  'confirmation_declined',
   'task_not_found',
   'task_not_startable',
   'dispatch_not_found',

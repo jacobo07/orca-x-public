@@ -1,4 +1,8 @@
-import { resolveCallerPaneKey } from '../orchestration/headless-coordinator'
+import {
+  hashCoordinatorToken,
+  resolveCallerPaneKey,
+  RUN_RESET_COORDINATOR_METHOD
+} from '../orchestration/headless-coordinator'
 import { createHash } from 'node:crypto'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -38,7 +42,16 @@ export class OrchestrationMutationExecutor {
         JSON.stringify(
           canonicalize({
             method: request.method,
-            params: replayStableCallerParams(this.runtime, params)
+            params: replayStableCallerParams(this.runtime, params),
+            // Why: this secret rides on the envelope. Without it, a retry with another one would
+            // replay a success for a credential the Run never received.
+            ...(request.method === RUN_RESET_COORDINATOR_METHOD
+              ? {
+                  replacement: hashCoordinatorToken(
+                    String(request.orchestrationNewCoordinatorToken)
+                  )
+                }
+              : {})
           })
         )
       )

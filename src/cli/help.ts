@@ -106,6 +106,8 @@ Terminals:
 Orchestration:
   orchestration run-create  Create and bind a lightweight orchestration Run
   orchestration run-use     Bind this coordinator terminal to an existing Run
+  orchestration run-reset-coordinator Give a headless Run a new coordinator (desktop approval)
+  orchestration run-abandon Release a headless Run's live work; terminals stay open
   orchestration run-current Show this terminal's bound Run
   orchestration run-list    List lightweight orchestration Runs
   orchestration run-show    Show one lightweight orchestration Run

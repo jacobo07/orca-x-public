@@ -114,6 +114,51 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it.each(['orchestration.runResetCoordinator', 'orchestration.runAbandon'])(
+      'keeps the socket alive while %s waits for the Owner',
+      async (method) => {
+        const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+        const runtime = new OrcaRuntimeService()
+        const db = new OrchestrationDb(':memory:')
+        runtime.setOrchestrationDb(db)
+        const run = db.createRun({
+          objective: 'Recovery',
+          coordinatorHandle: 'headless:sidecar',
+          coordinatorPaneKey: 'headless:sidecar',
+          coordinatorTokenHash: 'a'.repeat(64)
+        })
+        const seenSignals: (AbortSignal | undefined)[] = []
+        runtime.setCoordinatorRecoveryConfirmer(async (_request, signal) => {
+          seenSignals.push(signal)
+          await sleep(300)
+          return true
+        })
+        const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, keepaliveIntervalMs: 50 })
+        await server.start()
+
+        try {
+          const metadata = readRuntimeMetadata(userDataPath)
+          const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+            id: 'req_recovery',
+            authToken: metadata!.authToken,
+            method,
+            params: { run: run.id, headless: 'sidecar' },
+            orchestrationNewCoordinatorToken: 'b'.repeat(64)
+          })
+          await session.done
+
+          const keepalives = session.frames.filter((f) => f._keepalive === true)
+          const terminal = session.frames.find((f) => f.ok !== undefined)
+          expect(terminal).toMatchObject({ id: 'req_recovery', ok: true })
+          expect(keepalives.length).toBeGreaterThanOrEqual(3)
+          expect(seenSignals[0]).toBeInstanceOf(AbortSignal)
+        } finally {
+          db.close()
+          await server.stop()
+        }
+      }
+    )
+
     it('emits keepalive frames while orchestration.ask blocks for a reply', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

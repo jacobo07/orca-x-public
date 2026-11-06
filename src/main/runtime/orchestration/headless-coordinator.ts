@@ -21,6 +21,8 @@ export const HEADLESS_IDENTITY_FIELDS = [
 ] as const
 
 export const COORDINATOR_AUTH_FAILED = 'coordinator_auth_failed'
+export const RUN_RESET_COORDINATOR_METHOD = 'orchestration.runResetCoordinator'
+export const RUN_ABANDON_METHOD = 'orchestration.runAbandon'
 
 const NAME_PATTERN = /^[a-z0-9-]{3,40}$/
 // Why refuse UUID-shaped names: `headless:<uuid>` would parse as tab `headless` + a UUID leaf and
@@ -34,6 +36,21 @@ export type HeadlessCoordinatorAuthority = {
   /** Present on run-use when the caller also sent a replacement token (rotation). */
   newTokenHash?: string
 }
+
+/** What the Owner is asked to approve in the desktop dialog (spec K4 change 7). */
+export type CoordinatorRecoveryRequest = {
+  action: 'reset-coordinator' | 'abandon-run'
+  runId: string
+  objective: string
+  coordinatorHandle: string | null
+  newCoordinatorHandle?: string
+}
+
+export type CoordinatorRecoveryConfirmer = (
+  request: CoordinatorRecoveryRequest,
+  // Why: aborted when the caller disconnects, so its question does not stay on the Owner's screen.
+  signal?: AbortSignal
+) => Promise<boolean>
 
 export function isHeadlessHandle(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith(HEADLESS_HANDLE_PREFIX)
@@ -100,6 +117,25 @@ export function authorizeHeadlessCoordinator(args: {
     string,
     unknown
   >
+  if (args.method === RUN_RESET_COORDINATOR_METHOD || args.method === RUN_ABANDON_METHOD) {
+    // Why by context, not a flag: recovery changes who owns a Run, and only this host's Owner may.
+    if (!args.isLocalCaller) {
+      throw new OrchestrationError(
+        'remote_caller_refused',
+        'Run recovery is accepted from this host only. No effects were applied.',
+        { effectsApplied: false }
+      )
+    }
+    if (args.method === RUN_RESET_COORDINATOR_METHOD) {
+      return authorizeCoordinatorReset(record, args.newToken)
+    }
+    if (isHeadlessHandle(record.from)) {
+      // Why not the bound-Run check below: an abandoned Run is unbound, so its owner's retry would be
+      // refused. The handler compares this hash with the Run itself; a mismatch only means the dialog.
+      assertHeadlessHandle(record.from)
+      return { handle: record.from, tokenHash: verifiedTokenHash(args.token) }
+    }
+  }
   const values = headlessValues(record)
   // Why: a Run is also reached by its mailbox address (`check --terminal run:<id>`) and by id on
   // run-use. Those must be guarded too, or a headless Run is readable and takeable without its token.
@@ -171,6 +207,18 @@ export function authorizeHeadlessCoordinator(args: {
   return { handle, tokenHash }
 }
 
+// Why no current token: this verb exists because it was lost. The replacement is the only secret
+// the caller holds, and the desktop confirmation in the handler is what authorizes the change.
+function authorizeCoordinatorReset(
+  record: Record<string, unknown>,
+  newToken: unknown
+): HeadlessCoordinatorAuthority {
+  const handle = `${HEADLESS_HANDLE_PREFIX}${String(record.headless)}`
+  assertHeadlessHandle(handle)
+  const tokenHash = verifiedTokenHash(newToken)
+  return { handle, tokenHash, newTokenHash: tokenHash }
+}
+
 // Why refuse rather than ask for a token: a caller without a headless identity is a terminal (or
 // nobody), and a Run with a headless coordinator answers only to that coordinator's token.
 function refuseTokenGuardedRuns(db: OrchestrationDb, runIds: readonly string[]): void {
@@ -179,6 +227,16 @@ function refuseTokenGuardedRuns(db: OrchestrationDb, runIds: readonly string[]):
       throw authFailed(`Run ${runId} has a headless coordinator; only its token holder may use it.`)
     }
   }
+}
+
+/** True when the verified caller holds the token of this exact Run. */
+export function coordinatorOwnsRun(
+  db: OrchestrationDb,
+  runId: string,
+  authority: HeadlessCoordinatorAuthority | undefined
+): boolean {
+  const stored = db.getCoordinatorTokenHash(runId)
+  return Boolean(stored && authority && hashesEqual(stored, authority.tokenHash))
 }
 
 /**

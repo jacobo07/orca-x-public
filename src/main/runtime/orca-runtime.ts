@@ -732,6 +732,7 @@ import type { DispatchObservationResult } from './orchestration/dispatch-admissi
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { CoordinatorRecoveryConfirmer } from './orchestration/headless-coordinator'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/cdp-bridge'
 import {
@@ -3091,6 +3092,7 @@ export class OrcaRuntimeService {
   private forkBackfillStarted = false
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private offscreenBrowserBackend: BrowserBackend | null = null
+  private coordinatorRecoveryConfirmer: CoordinatorRecoveryConfirmer | null = null
   private emulatorBridge: EmulatorBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
@@ -6579,6 +6581,15 @@ export class OrcaRuntimeService {
 
   getAgentBrowserBridge(): AgentBrowserBridge | null {
     return this.agentBrowserBridge
+  }
+
+  // Why unset on serve: a headless host has no Owner at a screen, so recovery there must refuse.
+  setCoordinatorRecoveryConfirmer(confirmer: CoordinatorRecoveryConfirmer | null): void {
+    this.coordinatorRecoveryConfirmer = confirmer
+  }
+
+  getCoordinatorRecoveryConfirmer(): CoordinatorRecoveryConfirmer | null {
+    return this.coordinatorRecoveryConfirmer
   }
 
   setOffscreenBrowserBackend(backend: BrowserBackend | null): void {

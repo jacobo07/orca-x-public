@@ -164,11 +164,12 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
     name: 'orchestration.runShow',
     params: RunShowParams,
     handler: (params, { runtime }) => {
-      const run = runtime.getOrchestrationDb().getRun(params.id)
+      const db = runtime.getOrchestrationDb()
+      const run = db.getRun(params.id)
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run }
+      return { run, events: db.listRunEvents(params.id) }
     }
   })
 ]

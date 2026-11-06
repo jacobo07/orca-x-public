@@ -45,6 +45,17 @@ const HOST_INTERACTIVE_COMMANDS: Record<string, string> = {
     'orca account add runs an interactive agent login and cannot run through the buffered SSH relay bridge. Run it directly in a terminal on the Orca host machine.'
 }
 
+const HOST_ONLY_RUN_RECOVERY_VERBS = ['run-reset-coordinator', 'run-abandon']
+
+// Why raw tokens: the relay reaches the host CLI as a local caller, which would hide that this came
+// from elsewhere, and the two argv parsers disagree on leading flags. A rare false refusal is safe.
+function runRecoveryRefusal(argv: readonly string[]): string | undefined {
+  const verb = HOST_ONLY_RUN_RECOVERY_VERBS.find((name) => argv.includes(name))
+  return verb && argv.includes('orchestration')
+    ? `orca orchestration ${verb} changes who owns a Run and is accepted only on the Orca host machine.`
+    : undefined
+}
+
 export async function runRemoteOrcaCli(
   runtime: OrcaRuntimeService,
   request: RemoteOrcaCliRequest,
@@ -55,7 +66,9 @@ export async function runRemoteOrcaCli(
   const command = parsed.commandPath.join(' ')
 
   const interactiveMessage =
-    HOST_INTERACTIVE_COMMANDS[command] ?? HOST_INTERACTIVE_COMMANDS[parsed.commandPath[0] ?? '']
+    HOST_INTERACTIVE_COMMANDS[command] ??
+    HOST_INTERACTIVE_COMMANDS[parsed.commandPath[0] ?? ''] ??
+    runRecoveryRefusal(request.argv)
   if (interactiveMessage && !parsed.flags.has('help')) {
     if (json) {
       return {

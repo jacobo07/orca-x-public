@@ -36,7 +36,10 @@ import {
 } from '../../shared/orchestration-check-output'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 import { resolveTaskSpec } from '../task-spec-file'
-import { isHeadlessCoordinatorHandle } from '../runtime/headless-coordinator-env'
+import {
+  isHeadlessCoordinatorHandle,
+  readHeadlessCoordinator
+} from '../runtime/headless-coordinator-env'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -400,6 +403,9 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
   }
 }
 
+// Why this long: both verbs can wait for the Owner at the desktop dialog, which closes before this.
+const RUN_RECOVERY_TIMEOUT_MS = 5 * 60 * 1000
+
 function callMutation<TResult>(
   client: RuntimeClient,
   flags: Map<string, string | boolean>,
@@ -504,6 +510,53 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
+  },
+
+  'orchestration run-reset-coordinator': async ({ flags, client, json }) => {
+    const name = getRequiredStringFlag(flags, 'headless')
+    const headless = readHeadlessCoordinator(process.env)
+    // Why here: the secret rides only on the envelope, which is built from these two variables.
+    if (headless?.handle !== `headless:${name}` || !headless.newToken) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Set ORCA_HEADLESS_COORDINATOR=${name} and ORCA_HEADLESS_COORDINATOR_NEW_TOKEN before resetting a coordinator.`
+      )
+    }
+    const result = await callMutation<{ run: { id: string; objective: string } }>(
+      client,
+      flags,
+      'orchestration.runResetCoordinator',
+      { run: getRequiredStringFlag(flags, 'run'), headless: name },
+      { timeoutMs: RUN_RECOVERY_TIMEOUT_MS }
+    )
+    printResult(result, json, (r) => `Run ${r.run.id} now answers to ${headless.handle}.`)
+  },
+
+  'orchestration run-abandon': async ({ flags, client, json }) => {
+    const headless = readHeadlessCoordinator(process.env)
+    const result = await callMutation<{
+      runId: string
+      warning: string
+      dispatches: { dispatchId: string; state: string; terminalHandle: string | null }[]
+    }>(
+      client,
+      flags,
+      'orchestration.runAbandon',
+      {
+        run: getRequiredStringFlag(flags, 'run'),
+        // Why only with a token: without one the caller is not the owner and the dialog decides.
+        ...(headless?.token ? { from: headless.handle } : {})
+      },
+      { timeoutMs: RUN_RECOVERY_TIMEOUT_MS }
+    )
+    printResult(result, json, (r) =>
+      [
+        `Run ${r.runId} abandoned. ${r.warning}`,
+        ...r.dispatches.map(
+          (d) => `${d.dispatchId} ${d.state} terminal=${d.terminalHandle ?? 'none'}`
+        )
+      ].join('\n')
+    )
   },
 
   'orchestration run-current': async ({ flags, client, cwd, json }) => {

@@ -343,6 +343,7 @@ import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
+import { createCoordinatorRecoveryConfirmer } from './coordinator-recovery-dialog'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
@@ -3379,6 +3380,10 @@ void app.whenReady().then(async () => {
   }
   app.on('activate', handleMacAppActivation)
 
+  // Why desktop only: serve has no Owner at a screen, so Run recovery must refuse there.
+  if (!serveOptions) {
+    runtime.setCoordinatorRecoveryConfirmer(createCoordinatorRecoveryConfirmer(() => mainWindow))
+  }
   if (serveOptions) {
     // Why: give managed WSL launchers a brief chance to migrate before headless PTYs go live, without slow repairs withholding all RPC readiness.
     logStartupMilestone('wsl-cli-barrier-start')

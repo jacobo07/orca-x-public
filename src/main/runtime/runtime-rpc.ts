@@ -1,5 +1,9 @@
 /* eslint-disable max-lines -- Why: this file is the single security boundary for the bundled CLI — transport setup, auth-token enforcement, admission control, keepalive framing, and orphan-socket sweeping all co-locate deliberately so a reviewer can audit the boundary in one sitting. Splitting this across files would scatter the invariants without reducing complexity. */
 // Why: the single security boundary for the bundled CLI — auth-token enforcement, metadata publication, transport orchestration.
+import {
+  RUN_ABANDON_METHOD,
+  RUN_RESET_COORDINATOR_METHOD
+} from './orchestration/headless-coordinator'
 import { randomBytes } from 'node:crypto'
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -536,6 +540,11 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
   // waiter when the asking client disconnects.
   if (request.method === 'orchestration.ask') {
     return 'ask'
+  }
+  // Why: both can wait minutes for the Owner at the desktop dialog, and a dropped caller must close
+  // that dialog through the abort signal rather than leave a late Yes acting for nobody.
+  if (request.method === RUN_RESET_COORDINATOR_METHOD || request.method === RUN_ABANDON_METHOD) {
+    return 'wait'
   }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined

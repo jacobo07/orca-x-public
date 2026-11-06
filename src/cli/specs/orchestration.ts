@@ -26,6 +26,27 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'run-reset-coordinator'],
+    summary: 'Give a headless Run a new coordinator after a lost token',
+    usage:
+      'orca orchestration run-reset-coordinator --run <run_id> --headless <name> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'headless', 'retry-request'],
+    notes: [
+      'The Owner must approve it in the Orca desktop app; a server with no desktop refuses.',
+      'Needs ORCA_HEADLESS_COORDINATOR=<name> and the new secret in ORCA_HEADLESS_COORDINATOR_NEW_TOKEN. It is never printed.'
+    ]
+  },
+  {
+    path: ['orchestration', 'run-abandon'],
+    summary: 'Release the live work of a headless Run and unbind its coordinator',
+    usage: 'orca orchestration run-abandon --run <run_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'retry-request'],
+    notes: [
+      'Its coordinator needs no confirmation; anyone else must be approved in the Orca desktop app.',
+      'Worker terminals are left running and listed; nothing is stopped or deleted.'
+    ]
+  },
+  {
     path: ['orchestration', 'run-current'],
     summary: 'Show the Run bound to this coordinator terminal',
     usage: 'orca orchestration run-current [--from <handle>] [--json]',

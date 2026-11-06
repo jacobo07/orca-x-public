@@ -308,6 +308,9 @@ function legacyMessageMatchesQuestion(
 export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 
 export const LEGACY_CONTRACT_VERSION = 0
+export const RUN_EVENT_SENDER = 'orca:run-recovery'
+export const RUN_COORDINATOR_RESET_EVENT = 'run_coordinator_reset'
+export const RUN_ABANDONED_EVENT = 'run_abandoned'
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
 export type RunListPage = {
@@ -2775,6 +2778,137 @@ export class OrchestrationDb {
         UPDATE runs SET coordinator_token_hash = ?, updated_at = datetime('now')
         WHERE id = ? AND coordinator_token_hash IS NOT NULL`)
       .run(tokenHash, runId)
+  }
+
+  /** A headless name belongs to one Run at a time; taking it would unbind that Run's owner. */
+  assertCoordinatorNameAvailable(runId: string, handle: string): void {
+    const bound = this.getCoordinatorTokenHashForPane(handle)
+    if (bound && bound.runId !== runId) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `${handle} is bound to Run ${bound.runId}. Choose another name. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
+  }
+
+  // Why: recovery waits on a person; a Run that moved meanwhile is not the Run they approved.
+  assertRunGeneration(runId: string, generation: number): void {
+    if (this.getRunRaw(runId)?.consumer_generation !== generation) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Run ${runId} changed while waiting for confirmation. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
+  }
+
+  /**
+   * Gives a headless Run a new owner after a lost token. Why not bindRun: rebinding the same name
+   * counts as an unchanged binding there, which would keep the old hash and generation.
+   */
+  resetHeadlessCoordinator(params: {
+    runId: string
+    expectedGeneration: number
+    handle: string
+    tokenHash: string
+    eventBody: string
+  }): RunRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.assertRunGeneration(params.runId, params.expectedGeneration)
+      this.assertCoordinatorNameAvailable(params.runId, params.handle)
+      const previousHandle = this.getRunRaw(params.runId)?.coordinator_handle
+      for (const handle of new Set([previousHandle, params.handle])) {
+        if (handle) {
+          this.rememberRunCoordinatorHandle(params.runId, handle)
+          this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
+        }
+      }
+      this.db
+        .prepare(
+          `UPDATE runs
+           SET coordinator_handle = ?, coordinator_pane_key = ?, coordinator_token_hash = ?,
+               consumer_generation = consumer_generation + 1, updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(params.handle, params.handle, params.tokenHash, params.runId)
+      this.fenceOutstandingDelivery(params.runId)
+      this.insertRunEvent(params.runId, RUN_COORDINATOR_RESET_EVENT, params.eventBody)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return this.getRun(params.runId) as RunRow
+  }
+
+  /**
+   * Leaves an abandoned Run with no coordinator. Why the hash stays: its mailbox can hold worker
+   * output, and clearing the hash would open that mail to any terminal.
+   */
+  unbindAbandonedRun(params: { runId: string; eventBody: string }): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const handle = this.getRunRaw(params.runId)?.coordinator_handle
+      if (handle) {
+        this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
+      }
+      this.db
+        .prepare(
+          `UPDATE runs
+           SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+               consumer_generation = consumer_generation + 1, updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(params.runId)
+      this.fenceOutstandingDelivery(params.runId)
+      this.insertRunEvent(params.runId, RUN_ABANDONED_EVENT, params.eventBody)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** Dispatches of a Run that are still live; a succeeded worker cannot be abandoned. */
+  listAbandonableDispatchIds(runId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT d.id FROM dispatch_contexts d
+         LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
+         WHERE d.run_id = ? AND d.status IN ('pending', 'dispatched')
+           AND (w.state IS NULL OR w.state NOT IN ('succeeded', 'abandoned'))
+         ORDER BY d.rowid`
+      )
+      .all(runId) as { id: string }[]
+    return rows.map((row) => row.id)
+  }
+
+  listRunEvents(runId: string): { subject: string; body: string; created_at: string }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM messages
+         WHERE run_id = ? AND from_handle = ? AND delivery_contract = 'audit_only'
+         ORDER BY sequence`
+      )
+      .all(runId, RUN_EVENT_SENDER) as MessageRow[]
+    return exposeMessageListTimestamps(rows).map(({ subject, body, created_at }) => ({
+      subject,
+      body,
+      created_at
+    }))
+  }
+
+  private insertRunEvent(runId: string, subject: string, body: string): void {
+    this.insertMessage({
+      runId,
+      from: RUN_EVENT_SENDER,
+      to: `run:${runId}`,
+      subject,
+      body,
+      deliveryContract: 'audit_only'
+    })
   }
 
   private getRunRaw(id: string): RunRow | undefined {

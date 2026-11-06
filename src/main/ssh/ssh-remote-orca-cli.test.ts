@@ -682,6 +682,27 @@ describe('runRemoteOrcaCli', () => {
     expect(spawn).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    [['orchestration', 'run-reset-coordinator', '--run', 'run_1', '--json']],
+    [['orchestration', 'run-abandon', '--run', 'run_1', '--json']],
+    [['--retry-request', 'orchestration', 'run-abandon', '--run', 'run_1', '--json']],
+    [['orchestration', '--json', 'run-abandon', '--run', 'run_1']]
+  ])('refuses %j over the relay without reaching the host CLI', async (argv) => {
+    const { runtime } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      { argv, cwd: '/home/alice', env: {} },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'unsupported_over_ssh' }
+    })
+  })
+
   it('reports host-interactive command errors as JSON envelopes with --json', async () => {
     const { runtime } = createRuntime()
 
