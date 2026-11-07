@@ -151,7 +151,7 @@ No new timer, and no Orca-owned state file: the temp XML is deleted in `finally`
 
 ### Process notes
 - The PowerShell tool was not available. Shell work ran through Bash with the `# bash-safe` marker, and output was captured under
-  `C:\Users\Jacobo\.claude\jobs\bcab54e5\tmp`.
+  `C:\Users\<owner>\.claude\jobs\bcab54e5\tmp`.
 - A destructive-state guard matched the word "rm" inside a commit message. Nothing was deleted, and the command was re-issued unchanged.
 - Each commit body was checked with `git log -1 --format=%B`. None contains injected text.
 

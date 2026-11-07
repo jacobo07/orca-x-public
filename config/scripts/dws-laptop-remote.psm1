@@ -6,8 +6,8 @@
 $script:DwsGitExe = 'C:\Program Files\Git\cmd\git.exe'
 $script:DwsSshHost = 'gex44'
 $script:DwsSshTimeoutSec = 20
-$script:DwsRemoteClone = '/home/kobii/dws-0104-clone'
-$script:DwsRemoteOrcaX = '/home/kobii/orca-x'
+$script:DwsRemoteClone = '/home/<user>/dws-0104-clone'
+$script:DwsRemoteOrcaX = '/home/<user>/orca-x'
 $script:DwsBaseFenceSha = '865c80de25f4ebbd00ca83c71b0812113b24ac10'
 # Why in-memory, not on $readyPath: the pairing URL is a bearer credential (STA-2370). It must
 # never touch disk -- Get-DwsServeReady holds it here only for the lifetime of this PowerShell
@@ -72,7 +72,7 @@ function Publish-DwsServeBuild {
 
   # Witnesses (T-02-08): orca-x HEAD and two files under kobii's real agent homes must be
   # byte-for-byte unchanged after this whole publish, or the publish throws.
-  $before = Invoke-DwsSsh -RemoteBody 'git -C /home/kobii/orca-x rev-parse HEAD; stat -c %Y /home/kobii/.claude/settings.json 2>/dev/null || echo none; stat -c %Y /home/kobii/.codex/config.toml 2>/dev/null || echo none'
+  $before = Invoke-DwsSsh -RemoteBody 'git -C /home/<user>/orca-x rev-parse HEAD; stat -c %Y /home/<user>/.claude/settings.json 2>/dev/null || echo none; stat -c %Y /home/<user>/.codex/config.toml 2>/dev/null || echo none'
   if ($before.ExitCode -ne 0) { throw "Publish-DwsServeBuild: pre-probe failed: $($before.Output)" }
   $beforeLines = $before.Output -split "`n"
   $orcaXHeadBefore = $beforeLines[0].Trim()
@@ -103,11 +103,11 @@ function Publish-DwsServeBuild {
   # clone at the old fence) so fetch-bundle can run once, checking out the new SHA -- which then
   # overwrites the clone's own copy of this same script for every subsequent step.
   $localScript = Join-Path $worktree 'config\scripts\dws-gex44-serve-provision.sh'
-  $bootstrapRemote = "/home/kobii/dws-p2-bootstrap-$short.sh"
+  $bootstrapRemote = "/home/<user>/dws-p2-bootstrap-$short.sh"
   if ((Invoke-DwsScpTo -LocalPath $localScript -RemotePath $bootstrapRemote) -ne 0) {
     throw "Publish-DwsServeBuild: scp of bootstrap script failed"
   }
-  $remoteBundlePath = "/home/kobii/dws-p2-$short.bundle"
+  $remoteBundlePath = "/home/<user>/dws-p2-$short.bundle"
   if ((Invoke-DwsScpTo -LocalPath $bundlePath -RemotePath $remoteBundlePath) -ne 0) {
     throw "Publish-DwsServeBuild: scp of bundle failed"
   }
@@ -136,7 +136,7 @@ function Publish-DwsServeBuild {
   $boundEndpoint = $Matches[1]
   if ($install.Output -notmatch 'SVC_FENCE_OK (\S+)') { throw 'Publish-DwsServeBuild: no SVC_FENCE_OK in install output' }
 
-  $after = Invoke-DwsSsh -RemoteBody 'git -C /home/kobii/orca-x rev-parse HEAD; stat -c %Y /home/kobii/.claude/settings.json 2>/dev/null || echo none; stat -c %Y /home/kobii/.codex/config.toml 2>/dev/null || echo none'
+  $after = Invoke-DwsSsh -RemoteBody 'git -C /home/<user>/orca-x rev-parse HEAD; stat -c %Y /home/<user>/.claude/settings.json 2>/dev/null || echo none; stat -c %Y /home/<user>/.codex/config.toml 2>/dev/null || echo none'
   if ($after.ExitCode -ne 0) { throw "Publish-DwsServeBuild: post-probe failed: $($after.Output)" }
   $afterLines = $after.Output -split "`n"
   $orcaXHeadAfter = $afterLines[0].Trim()
@@ -145,7 +145,7 @@ function Publish-DwsServeBuild {
   Write-Output "ORCA_X_HEAD_AFTER=$orcaXHeadAfter"
 
   if ($orcaXHeadAfter -ne $orcaXHeadBefore) {
-    throw "Publish-DwsServeBuild: /home/kobii/orca-x HEAD moved ($orcaXHeadBefore -> $orcaXHeadAfter)"
+    throw "Publish-DwsServeBuild: /home/<user>/orca-x HEAD moved ($orcaXHeadBefore -> $orcaXHeadAfter)"
   }
   if ($claudeMtimeAfter -ne $claudeMtimeBefore -or $codexMtimeAfter -ne $codexMtimeBefore) {
     throw "Publish-DwsServeBuild: witness mtime changed (claude $claudeMtimeBefore->$claudeMtimeAfter, codex $codexMtimeBefore->$codexMtimeAfter)"
@@ -176,7 +176,7 @@ function Get-DwsArtifact {
   $state = Get-DwsStateDir
   $worktree = Get-DwsWorktreeRoot
   $short = $Sha.Substring(0, 7)
-  $remoteArtifact = "/home/kobii/dws-runs/p2-$short-out.tar.gz"
+  $remoteArtifact = "/home/<user>/dws-runs/p2-$short-out.tar.gz"
   $localArtifact = Join-Path $state "p2-$short-out.tar.gz"
 
   if ((Invoke-DwsScpFrom -RemotePath $remoteArtifact -LocalPath $localArtifact) -ne 0) {

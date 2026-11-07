@@ -16,7 +16,7 @@ $p2State = Get-DwsStateDir
 $state = Join-Path $env:LOCALAPPDATA 'orca-dws-p5'
 New-Item -ItemType Directory -Path $state -Force | Out-Null
 $stepsLog = Join-Path $state 'steps.log'
-$controlRemote = '/home/kobii/dws-runs/dws-node-manifest-ssh-control.sh'
+$controlRemote = '/home/<user>/dws-runs/dws-node-manifest-ssh-control.sh'
 $remoteOut = '/home/orca-svc/.orca-dws'
 
 function Write-Step {
@@ -102,7 +102,7 @@ try {
 
     # 3 ARTIFACT BOTH ENDS
     $short = $deployed.short
-    $remoteArtifact = "/home/kobii/dws-runs/p2-$short-out.tar.gz"
+    $remoteArtifact = "/home/<user>/dws-runs/p2-$short-out.tar.gz"
     try {
       Get-DwsArtifact -Sha $deployed.sha -ExpectedSha256 $deployed.artifactSha256 | Out-Null
     } catch {
@@ -164,7 +164,7 @@ try {
 
     $ready = Get-DwsServeReady
     $tunnelPort = $ready.port
-    $readyLine = (Invoke-DwsSsh -RemoteBody "sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json").Output
+    $readyLine = (Invoke-DwsSsh -RemoteBody "sudo bash /home/<user>/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json").Output
     $readyObj = $null
     try { $readyObj = $readyLine | ConvertFrom-Json } catch { $readyObj = $null }
     $serveRuntimeId = $null

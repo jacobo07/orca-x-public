@@ -17,10 +17,10 @@ dirty files) or its stash. `RESUMPTION_FILE.md` belongs to the durability progra
   142/142, 2 drills. NOT done: markdown/file-preview editors (seams in `mobile/.stability-bc-findings.md`,
   untracked), salvage retrieval UI, emulator process-death run.
 
-**GEX44 recipe.** Bundle `HEAD ^<sha gex has>` → `/home/kobii/`, fetch `HEAD:refs/heads/<n>`, per-run
-worktree `/home/kobii/stab-*`, assert `rev-parse`. Reads ONLY via uploaded scripts
-(`/home/kobii/read-ev.py <dir> <names>`, `/home/kobii/grep-ev.py <file> <single-token>`): inline
-python/quotes through PowerShell→ssh break every time. Evidence in `/home/kobii/stab-evidence/`.
+**GEX44 recipe.** Bundle `HEAD ^<sha gex has>` → `/home/<user>/`, fetch `HEAD:refs/heads/<n>`, per-run
+worktree `/home/<user>/stab-*`, assert `rev-parse`. Reads ONLY via uploaded scripts
+(`/home/<user>/read-ev.py <dir> <names>`, `/home/<user>/grep-ev.py <file> <single-token>`): inline
+python/quotes through PowerShell→ssh break every time. Evidence in `/home/<user>/stab-evidence/`.
 
 **Host.** 0.6–2.3 GB free; ripgrep over src times out (use `git grep`); files are CRLF — run
 `oxfmt <files>` then check `git diff -w --numstat` for laundered hunks before committing.

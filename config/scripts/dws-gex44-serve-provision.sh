@@ -15,18 +15,18 @@ set -u
 # Why hardcoded, not $HOME/...: this script runs as kobii (build) AND root via sudo (install),
 # and root's $HOME is /root -- a $HOME-relative default silently resolved to a nonexistent path
 # under sudo (DWS-P2, found via a real install run against GEX44).
-CLONE_DIR="${DWS_CLONE_DIR:-/home/kobii/dws-0104-clone}"
-RUNS_DIR="${DWS_RUNS_DIR:-/home/kobii/dws-runs}"
+CLONE_DIR="${DWS_CLONE_DIR:-/home/<user>/dws-0104-clone}"
+RUNS_DIR="${DWS_RUNS_DIR:-/home/<user>/dws-runs}"
 SVC_USER="orca-svc"
 SVC_HOME="/home/$SVC_USER"
 SVC_ROOT="$SVC_HOME/.orca-dws"
 SVC_CHECKOUT_ROOT="$SVC_HOME/dws-p2"
 SERVE_PORT=6791
 UNIT_NAME="orca-dws-serve.service"
-NODE24_BIN="/home/kobii/.orca-toolchain/node24/bin"
+NODE24_BIN="/home/<user>/.orca-toolchain/node24/bin"
 # Why a separate literal, not "$NODE24_BIN/..": systemd's BindReadOnlyPaths= refuses to normalize
 # a trailing "/.." and silently ignores the whole directive (found via a real install run).
-NODE24_ROOT="/home/kobii/.orca-toolchain/node24"
+NODE24_ROOT="/home/<user>/.orca-toolchain/node24"
 
 cmd="${1:-}"
 shift || true
@@ -40,17 +40,17 @@ cmd_fetch_bundle() {
     echo "usage: fetch-bundle <bundle-remote-path> <sha> <short>" >&2; exit 2
   }
   local before_head
-  before_head=$(git -C /home/kobii/orca-x rev-parse HEAD)
+  before_head=$(git -C /home/<user>/orca-x rev-parse HEAD)
   echo "ORCA_X_HEAD_BEFORE=$before_head"
 
-  git -C /home/kobii/orca-x fetch "$bundle" "HEAD:refs/heads/dws-p2-$short"
+  git -C /home/<user>/orca-x fetch "$bundle" "HEAD:refs/heads/dws-p2-$short"
   echo "FETCH_INTO_ORCA_X_OK dws-p2-$short"
 
   local clone_before_head
   clone_before_head=$(git -C "$CLONE_DIR" rev-parse HEAD 2>/dev/null || echo none)
   echo "CLONE_HEAD_BEFORE=$clone_before_head"
 
-  git -C "$CLONE_DIR" fetch /home/kobii/orca-x "refs/heads/dws-p2-$short:refs/heads/dws-p2-$short"
+  git -C "$CLONE_DIR" fetch /home/<user>/orca-x "refs/heads/dws-p2-$short:refs/heads/dws-p2-$short"
   # Why: $CLONE_DIR is a disposable, private scratch clone reused across DWS plans (01-04-SUMMARY
   # "Task 2 resumed"); a prior in-place edit here can leave tracked-file modifications that block
   # a plain checkout. Discard tracked changes only (never touches the node_modules symlink or any
@@ -74,7 +74,7 @@ cmd_fetch_bundle() {
   fi
 
   local after_head
-  after_head=$(git -C /home/kobii/orca-x rev-parse HEAD)
+  after_head=$(git -C /home/<user>/orca-x rev-parse HEAD)
   echo "ORCA_X_HEAD_AFTER=$after_head"
   if [ "$after_head" != "$before_head" ]; then
     echo "ORCA_X_HEAD_MOVED before=$before_head after=$after_head"
@@ -211,7 +211,7 @@ cmd_install() {
   local node24_ok=0; [ -x "$NODE24_BIN/node" ] && node24_ok=1
   need_row REQUIRED node24-dir "$node24_ok" "$NODE24_BIN"
 
-  local electron_bin="/home/kobii/orca-x/node_modules/electron/dist/electron"
+  local electron_bin="/home/<user>/orca-x/node_modules/electron/dist/electron"
   local electron_ok=0; [ -x "$electron_bin" ] && electron_ok=1
   need_row REQUIRED electron-binary "$electron_ok" "$electron_bin"
 
@@ -294,7 +294,7 @@ cmd_install() {
     if [ -n "$resolved" ]; then
       resolved=$(readlink -f "$resolved")
       case "$resolved" in
-        /home/kobii/.claude/*|/home/kobii/.codex/*)
+        /home/<user>/.claude/*|/home/<user>/.codex/*)
           echo "AGENT_BIN_REFUSED name=$name path=$resolved"
           ;;
         *)
@@ -308,7 +308,7 @@ cmd_install() {
   done
 
   local vite_bind=""
-  if [ -d "/home/kobii/orca-x/node_modules/.vite" ]; then
+  if [ -d "/home/<user>/orca-x/node_modules/.vite" ]; then
     vite_bind="BindPaths=$SVC_ROOT/writable-vite:$svc_checkout/node_modules/.vite"
   fi
 
@@ -340,7 +340,7 @@ Group=$SVC_USER
 WorkingDirectory=$svc_checkout
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 Environment=PATH=$SVC_ROOT/node24/bin:/usr/local/bin:/usr/bin:/bin
-BindReadOnlyPaths=/home/kobii/orca-x/node_modules:$svc_checkout/node_modules
+BindReadOnlyPaths=/home/<user>/orca-x/node_modules:$svc_checkout/node_modules
 BindReadOnlyPaths=$NODE24_ROOT:$SVC_ROOT/node24
 ${claude_bind}
 ${codex_bind}

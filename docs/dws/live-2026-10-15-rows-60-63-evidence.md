@@ -8,7 +8,7 @@ teardown `PROC_COUNT=0` after the run.
 
 ## Source of the lines below
 
-The run log stayed on the laptop. GEX44 holds no copy (searched `/home/kobii/missions` and `/tmp` on
+The run log stayed on the laptop. GEX44 holds no copy (searched `/home/<user>/missions` and `/tmp` on
 2026-10-15 for `HWF63_COMPARE_LIVE` and `HWF60_PIN`: no file). The values are copied from the commit
 messages written at the run, and from `docs/dws/rebaseline-handoff-backlog.md`:
 

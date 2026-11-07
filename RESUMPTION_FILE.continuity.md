@@ -43,7 +43,7 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
   gate green (28 sites), 47 continuity tests. verify:localization-catalog red ONLY on pre-existing
   terminalPreview.* keys in TerminalPreviewCard.tsx (not ours).
 - DONE P3 proof `837e047ff`+`d021f34a3`: e2e `tests/e2e/resume-center.spec.ts` GREEN on GEX44 at
-  d021f34a3 (1 passed, 40.6 s; worktree /home/kobii/rc-e2e, build --mode e2e). Two live tabs print
+  d021f34a3 (1 passed, 40.6 s; worktree /home/<user>/rc-e2e, build --mode e2e). Two live tabs print
   node-concatenated markers; both rows read `warm`; each expanded row's daemon-history snapshot holds
   its own marker and not its sibling's. Red drill (GEX44, same commit): every pane resolved from the
   first tab (findTab ignores the id + per-leaf ptyId lookup off) -> RED "the RCB row never showed its

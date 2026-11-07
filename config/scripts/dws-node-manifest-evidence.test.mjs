@@ -264,8 +264,8 @@ describe('scanForSecrets', () => {
     expect(scanForSecrets('https://host/x?code=abc123').length).toBeGreaterThan(0)
     expect(scanForSecrets(`Authorization: Bearer ${'A1b2'.repeat(20)}`).length).toBeGreaterThan(0)
     expect(scanForSecrets(`token=${'Zy9_'.repeat(20)}`).length).toBeGreaterThan(0)
-    expect(scanForSecrets('/home/kobii/.claude/settings.json').length).toBeGreaterThan(0)
-    expect(scanForSecrets('/home/kobii/.codex/auth.json').length).toBeGreaterThan(0)
+    expect(scanForSecrets('/home/<user>/.claude/settings.json').length).toBeGreaterThan(0)
+    expect(scanForSecrets('/home/<user>/.codex/auth.json').length).toBeGreaterThan(0)
   })
 
   it('passes the captured GEX44 numbers and the model id', () => {

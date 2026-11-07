@@ -138,7 +138,7 @@ M3 procedure starting from a shut-down PC.
 ## Institutional close
 
 - Knowledge Vault lesson (outside the repo, not committed):
-  `C:\Users\Jacobo\.claude\knowledge_vault\lessons\host-wake-packet-sent-is-not-a-host-woken.md`, sha256
+  `C:\Users\<owner>\.claude\knowledge_vault\lessons\host-wake-packet-sent-is-not-a-host-woken.md`, sha256
   `8F7D1C59339F2C974F38FE694338C29A467ABFD3A7CD0D043F33DF57A7AC9851`; the path did not exist before the write.
 - UKDL PROPOSAL (not applied): `20-UKDL-PROPOSAL.md`, five entries, zero collisions. The shared
   `ukdl-universal.md` sha256 `468CA6543674278D5E92922A133BAE1FCF189813C503BCB1E75CAEC7CF5C9D46` before and after

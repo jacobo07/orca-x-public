@@ -213,7 +213,7 @@ STUB
     else
       echo "KNOWN_HOSTS_SHA=absent"
     fi
-    echo "ORCA_X_HEAD=$(git -C /home/kobii/orca-x rev-parse HEAD)"
+    echo "ORCA_X_HEAD=$(git -C /home/<user>/orca-x rev-parse HEAD)"
     if [ -d "$REAL_HOME/.orca-remote" ]; then
       echo "REAL_RELAY_LISTING_SHA=$(find "$REAL_HOME/.orca-remote" -maxdepth 2 -printf '%P %T@\n' | sort | sha256sum | awk '{print $1}')"
     else
@@ -514,9 +514,9 @@ PY
   serve-p20)
     if [ ! -f "$ROOT/repos/p20-project/orca.yaml" ]; then echo "REFUSED no-project=$ROOT"; exit 3; fi
     case "$EXTRA" in
-      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/?*) ;;
+      /home/<user>/orca-x|/home/<user>/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/?*) ;;
       *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
     esac
     case "$EXTRA2" in
@@ -526,7 +526,7 @@ PY
     PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
     mkdir -p "$ROOT/serve-data"
     cd "$EXTRA"
-    export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    export PATH="/home/<user>/.orca-toolchain/node24/bin:$PATH"
     # shellcheck disable=SC2086
     # A dev-tree app picks its userData from ORCA_DEV_USER_DATA_PATH; the CLI finds it through ORCA_USER_DATA_PATH.
     setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_USER_DATA_PATH="$ROOT/serve-data" $EXTRA2 serve --port "$PORT" --bind-host 127.0.0.1 --no-pairing > "$ROOT/serve.log" 2>&1 < /dev/null &
@@ -536,13 +536,13 @@ PY
   serve-query-p20)
     if [ ! -f "$ROOT/repos/p20-project/orca.yaml" ]; then echo "REFUSED no-project=$ROOT"; exit 3; fi
     case "$EXTRA" in
-      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/?*) ;;
+      /home/<user>/orca-x|/home/<user>/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/?*) ;;
       *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
     esac
     cd "$EXTRA"
-    export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    export PATH="/home/<user>/.orca-toolchain/node24/bin:$PATH"
     # A fresh runtime holds no repos, so the project is added before it is measured.
     env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_CLI_INVOCATION=1 node out/cli/index.js repo add --path "$ROOT/repos/p20-project" --json > "$ROOT/serve-repo-add.json" 2>&1 && AEC=0 || AEC=$?
     echo "SERVE_REPO_ADD_EXIT=$AEC"
@@ -570,9 +570,9 @@ PY
     # Paired disposable serve for row 72: a remote worker runs the mission stub agent and reports worker_done.
     if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
     case "$EXTRA" in
-      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
-      /home/kobii/?*) ;;
+      /home/<user>/orca-x|/home/<user>/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/<user>/?*) ;;
       *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
     esac
     case "$EXTRA2" in
@@ -592,7 +592,7 @@ PY
     fi
     PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
     cd "$EXTRA"
-    export PATH="$STUB:/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    export PATH="$STUB:/home/<user>/.orca-toolchain/node24/bin:$PATH"
     # shellcheck disable=SC2086
     setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_USER_DATA_PATH="$ROOT/serve-data" \
       ORCA_DEV_CLI_INVOCATION=1 ORCA_E2E_CLI_ENTRY="$EXTRA/out/cli/index.js" MISSION_STUB_HOST=gex44 \

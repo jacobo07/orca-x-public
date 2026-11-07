@@ -21,7 +21,7 @@ describe('resolveProjectLaunchTarget', () => {
   // place the user never picked.
   it('refuses a remote project rather than running its path locally', () => {
     expect(
-      resolveProjectLaunchTarget({ path: '/home/kobii/app', connectionId: 'ssh-1' })
+      resolveProjectLaunchTarget({ path: '/home/<user>/app', connectionId: 'ssh-1' })
     ).toBeNull()
   })
 

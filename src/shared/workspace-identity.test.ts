@@ -27,7 +27,7 @@ describe('canonicalRepoKey', () => {
     )
   })
 
-  it.each(['C:\\repos\\orca', '/home/kobii/orca', 'orca', '', 'https://'])(
+  it.each(['C:\\repos\\orca', '/home/<user>/orca', 'orca', '', 'https://'])(
     'refuses %j, which is no remote',
     (text) => {
       expect(canonicalRepoKey(text)).toBeNull()

@@ -1,8 +1,8 @@
 # SEND-P0 Owner evidence (screenshots, 2026-10-27 15:21 local)
 
 Files (Owner's Downloads, read them directly):
-- Phone: `C:\Users\Jacobo\Downloads\Screenshot_20261027_152145_Orca X.jpg`
-- Desktop photo: `C:\Users\Jacobo\Downloads\20261027_152137.jpg`
+- Phone: `C:\Users\<owner>\Downloads\Screenshot_20261027_152145_Orca X.jpg`
+- Desktop photo: `C:\Users\<owner>\Downloads\20261027_152137.jpg`
 
 ## What they show
 - **Runtime:** a Claude Code agent TUI (status line "Sonnet 5.5 | Jacobo 16%", bypass permissions on).

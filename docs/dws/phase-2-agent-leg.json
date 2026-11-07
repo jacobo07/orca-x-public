@@ -32,7 +32,7 @@
     "summary": "Mint a login inside the orca-svc HOME on GEX44; never copy a credential file from another HOME",
     "commands": [
       "laptop terminal: ssh -N -L 127.0.0.1:6791:127.0.0.1:6791 gex44",
-      "laptop terminal: ssh gex44 'sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'  (pairing URL)",
+      "laptop terminal: ssh gex44 'sudo bash /home/<user>/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'  (pairing URL)",
       "Orca desktop: pair the gex44-svc host with the SSH-tunnel box checked, open a terminal on that host",
       "in that terminal: /home/orca-svc/.orca-dws/agent-bin/claude, type /login, finish the browser flow, /exit",
       "Codex instead: /home/orca-svc/.orca-dws/agent-bin/codex login"

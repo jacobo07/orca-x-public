@@ -10,12 +10,12 @@ SHA="${1:-}"
 LABEL="${2:-}"
 RUN_DIR="${3:-}"
 MODE="${4:-}"
-CLONE_DIR="/home/kobii/dws-0104-clone"
-RUN_ROOT="/home/kobii/dws-0104-clone/.dws-p7-runs"
+CLONE_DIR="/home/<user>/dws-0104-clone"
+RUN_ROOT="/home/<user>/dws-0104-clone/.dws-p7-runs"
 
 case "$RUN_DIR" in
   *..*) echo "run-dir must not contain .." >&2; exit 2 ;;
-  /home/kobii/dws-0104-clone/.dws-p7-runs/?*) ;;
+  /home/<user>/dws-0104-clone/.dws-p7-runs/?*) ;;
   *) echo "usage: <sha> <label> <run-dir under $RUN_ROOT> [--checkout]" >&2; exit 2 ;;
 esac
 [ -n "$SHA" ] && [ -n "$LABEL" ] || { echo "usage: <sha> <label> <run-dir> [--checkout]" >&2; exit 2; }
@@ -33,7 +33,7 @@ blocked() {
   exit 0
 }
 
-export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
+export PATH="/home/<user>/.orca-toolchain/node24/bin:$PATH"
 cd "$CLONE_DIR" || blocked clone-missing "cannot enter the build clone"
 
 if [ "$MODE" = "--checkout" ]; then

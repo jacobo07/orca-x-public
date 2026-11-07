@@ -4,7 +4,7 @@
   "startedAt": "2026-10-27T15:59:21.476Z",
   "electron": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe",
   "appRoot": "C:\\owx-haf",
-  "ownerDevicesPath": "C:\\Users\\Jacobo\\AppData\\Roaming\\orca\\orca-devices.json",
+  "ownerDevicesPath": "C:\\Users\\<owner>\\AppData\\Roaming\\orca\\orca-devices.json",
   "ownerDevicesHashBefore": "39759f41605f2b5e3e3fde1f3fa7c71c14bbf5d6ab06a35ceea5fcfaa3e6aa7b",
   "baselineServeMainCount": 0,
   "baselineScratchFamilyCount": 0,
@@ -35,12 +35,12 @@
     {
       "pid": 15284,
       "ws": 37044224,
-      "cmd": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe --type=crashpad-handler --user-data-dir=C:\\Users\\Jacobo\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userDat"
+      "cmd": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe --type=crashpad-handler --user-data-dir=C:\\Users\\<owner>\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userDat"
     },
     {
       "pid": 12100,
       "ws": 65273856,
-      "cmd": "\"C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe\" --type=gpu-process --user-data-dir=\"C:\\Users\\Jacobo\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userData\""
+      "cmd": "\"C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe\" --type=gpu-process --user-data-dir=\"C:\\Users\\<owner>\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userData\""
     },
     {
       "pid": 10560,

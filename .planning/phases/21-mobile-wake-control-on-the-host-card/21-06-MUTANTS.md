@@ -7,7 +7,7 @@ drills (labels UNIT laptop, UNIT GEX44, GATE, MUTANT). None of them is phone evi
 ## Protocol (20-04-MUTANTS.md, restore by byte copy)
 
 Driver `h06-drill.ps1` plus the drill table `h06-drills.ps1`, both in the job tmp directory
-`C:\Users\Jacobo\.claude\jobs\fd0cc958\tmp\`, never in the repo. One drill per invocation:
+`C:\Users\<owner>\.claude\jobs\fd0cc958\tmp\`, never in the repo. One drill per invocation:
 
 1. `git diff --quiet -- src config mobile` exit 0 and `git diff --quiet -- <target>` exit 0; the target's bytes are
    copied to the tmp directory and their sha256 recorded.

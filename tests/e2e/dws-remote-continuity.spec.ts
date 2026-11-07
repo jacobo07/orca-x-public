@@ -53,7 +53,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 const STATUS_SCRIPT =
-  'bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh status'
+  'bash /home/<user>/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh status'
 
 function parseMainPid(statusOutput: string): string | null {
   const lines = statusOutput.split('\n')

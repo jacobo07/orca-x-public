@@ -7,7 +7,7 @@ These are unit and gate drills. They are not M3 or M4 evidence.
 ## Protocol (19-VERIFICATION, restore by byte copy)
 
 Driver `g04-mutant.ps1` plus the drill table `g04-drills.ps1`, both in the job tmp directory
-`C:\Users\Jacobo\.claude\jobs\fd0cc958\tmp\`, never in the repo. Per drill:
+`C:\Users\<owner>\.claude\jobs\fd0cc958\tmp\`, never in the repo. Per drill:
 
 1. `git diff --quiet -- src config mobile` exit 0; the target's bytes are copied to the tmp directory and their
    sha256 recorded.

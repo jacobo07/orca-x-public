@@ -7,7 +7,7 @@ unit-level drills over the UNIT in-process relay leg (loopback relay cell, real 
 ## Protocol (19-VERIFICATION, restore by byte copy)
 
 Driver `mutant.ps1` plus one wrapper per drill (`drill-L1.ps1`, `drill-L2.ps1`), all in the job tmp directory
-`C:\Users\Jacobo\.claude\jobs\fd0cc958\tmp\`, never in the repo. Per drill:
+`C:\Users\<owner>\.claude\jobs\fd0cc958\tmp\`, never in the repo. Per drill:
 
 1. `git diff --quiet -- <file>` exit 0; the file's bytes are copied to the tmp directory and their sha256 recorded.
 2. The anchor occurs exactly once (`Select-String -SimpleMatch` line count 1 and regex text count 1).

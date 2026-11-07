@@ -85,7 +85,7 @@ if ($CaptureCount -lt 1) {
 # Why hardcoded, not a getter from dws-laptop-remote.psm1: $script:DwsSshHost and $script:DwsRemoteClone
 # are module-PRIVATE and the module exports no accessor. Values must match that module's constants.
 $dwsRemoteSshHost = 'gex44'
-$dwsRemoteClone = '/home/kobii/dws-0104-clone'
+$dwsRemoteClone = '/home/<user>/dws-0104-clone'
 # Why invariant: an es-ES host would otherwise format 0.2 as "0,2" and break the remote `sleep` argument.
 $captureIntervalText = $CaptureIntervalSec.ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
 if ([double]::Parse($captureIntervalText, [System.Globalization.CultureInfo]::InvariantCulture) -le 0) {

@@ -61,7 +61,7 @@ Owner summary and an agent resume block. The fresh-agent question set and rubric
 - Tracer gate: it is not `blocking-human`. The verify was re-run green, so expansion continued.
 - AGENTS.md: `git diff --stat` = `1 file changed, 4 insertions(+)`. That is one `## Host Wake` section, with a
   heading, a blank line and one paragraph line placed after `## Detach, Stop, Cancel`. Nothing else changed.
-- Vault lesson: `C:\Users\Jacobo\.claude\knowledge_vault\lessons\host-wake-packet-sent-is-not-a-host-woken.md`.
+- Vault lesson: `C:\Users\<owner>\.claude\knowledge_vault\lessons\host-wake-packet-sent-is-not-a-host-woken.md`.
   - `Test-Path` returned False before the write, so it is a new file.
   - sha256 `8F7D1C59339F2C974F38FE694338C29A467ABFD3A7CD0D043F33DF57A7AC9851`.
   - Its format follows `mobile-chat-send-written-is-not-admitted.md`.

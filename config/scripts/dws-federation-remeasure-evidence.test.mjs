@@ -209,7 +209,7 @@ describe('secret refusal', () => {
   const shapes = {
     'pairing-url': 'orca://pair?x=1',
     'code-query': 'https://h/p?code=abc',
-    'agent-home': '/home/kobii/.claude/x',
+    'agent-home': '/home/<user>/.claude/x',
     'github-token': `ghp_${'A'.repeat(36)}`,
     'private-key': ['-----BEGIN ', 'OPENSSH PRIVATE', ' KEY-----'].join('')
   }

@@ -5,7 +5,7 @@ Written on the laptop for a session on the other PC, then carried on the desktop
 
 - `orca-x/dws-rebaseline`: the GEX44 mission branch `dws/rebaseline` at `ca3a66869`
   (85 commits over the integration base `a779261583`). Source of truth stays on GEX44:
-  `/home/kobii/missions/dws-canary`, worktree `/home/kobii/missions/dws-exec/rb`, workstream `dwsrb`.
+  `/home/<user>/missions/dws-canary`, worktree `/home/<user>/missions/dws-exec/rb`, workstream `dwsrb`.
 - `orca-x/dws-rebaseline-live`: this branch. It is `dws/rebaseline` plus the live-leg harness fixes and
   the product fixes below.
 
@@ -97,5 +97,5 @@ click the new-tab "+" without `force` (a forced click lands on whatever covers i
 skills/software-best-practices? Put them somewhere on this PC and I'll install them."
 
 Done 2026-10-15 on the desktop PC: the 98 files (CLAUDE.md, `agents\` 95, `skills\software-best-practices\` 2)
-are staged in `C:\Users\Jacobo\Desktop\laptop-claude-staging`, each checked against its blob in
+are staged in `C:\Users\<owner>\Desktop\laptop-claude-staging`, each checked against its blob in
 `jacobo07/claude-config-laptop`. Nothing was written to `~\.claude`; the Owner installs them.

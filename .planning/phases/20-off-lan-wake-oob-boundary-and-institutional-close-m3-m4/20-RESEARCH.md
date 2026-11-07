@@ -407,7 +407,7 @@ Mutant protocol: use the 19-VERIFICATION driver exactly (`19-VERIFICATION.md:80-
 
 ## 6. Institutional close (D-11..D-13)
 
-- **Knowledge Vault:** `C:\Users\Jacobo\.claude\knowledge_vault\` contains only `core/apex-completion-standard.md`,
+- **Knowledge Vault:** `C:\Users\<owner>\.claude\knowledge_vault\` contains only `core/apex-completion-standard.md`,
   `core/HARD-RULES-DIGEST.md`, `global_vetoes.md` and `lessons/` (3 files). **`INDEX.md` does not exist**, even
   though the global CLAUDE.md references it. [VERIFIED: Glob]
   - Lesson format, as in `lessons/mobile-chat-send-written-is-not-admitted.md:1-32`: no front matter;
@@ -415,7 +415,7 @@ Mutant protocol: use the 19-VERIFICATION driver exactly (`19-VERIFICATION.md:80-
     (HR / PR / TRAP candidates), `Repo evidence: <path> (branch ...)`.
   - Write new lessons there, e.g. `host-wake-packet-sent-is-not-a-host-woken.md`,
     `host-unreadable-registry-is-unknown.md`, `lint-staged-stale-index-after-commit.md`.
-- **UKDL:** `C:\Users\Jacobo\.claude\skills\claude-power-pack\vault\knowledge_base\ukdl-universal.md`.
+- **UKDL:** `C:\Users\<owner>\.claude\skills\claude-power-pack\vault\knowledge_base\ukdl-universal.md`.
   - Shape: `## <Topic> (<incident/date>)` sections with `### HR-|PR-|T-<NAME>-001` entries plus a short paragraph
     (e.g. `:259-271`). Precedent: `docs/dws/live-2026-10-18-rows-52-53-vault-and-ukdl.md:14-16` (search first for
     existing ids, then append under a dated section).

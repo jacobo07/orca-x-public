@@ -18,11 +18,11 @@ $ErrorActionPreference = 'Continue'
 $script:Git = 'C:\Program Files\Git\cmd\git.exe'
 $script:Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $script:LaneModule = Join-Path $PSScriptRoot 'dws-laptop-remote.psm1'
-$script:Clone = '/home/kobii/dws-0104-clone'
-$script:OrcaX = '/home/kobii/orca-x'
+$script:Clone = '/home/<user>/dws-0104-clone'
+$script:OrcaX = '/home/<user>/orca-x'
 $script:BaseFence = '865c80de25f4ebbd00ca83c71b0812113b24ac10'
-$script:RunRoot = '/home/kobii/dws-0104-clone/.dws-p7-runs'
-$script:Node24 = '/home/kobii/.orca-toolchain/node24/bin'
+$script:RunRoot = '/home/<user>/dws-0104-clone/.dws-p7-runs'
+$script:Node24 = '/home/<user>/.orca-toolchain/node24/bin'
 $script:Step = 0
 $env:Path = 'C:\Program Files\Git\cmd;' + $env:Path
 Import-Module $script:LaneModule -Force

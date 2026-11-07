@@ -1,7 +1,7 @@
 # 20 UKDL proposal (PROPOSAL, not applied)
 
 **Status: PROPOSAL.** Nothing in this file has been written to the Power Pack UKDL. The shared file
-`C:\Users\Jacobo\.claude\skills\claude-power-pack\vault\knowledge_base\ukdl-universal.md` was read only, for the
+`C:\Users\<owner>\.claude\skills\claude-power-pack\vault\knowledge_base\ukdl-universal.md` was read only, for the
 entry format and a collision check. Applying it is the Owner's act, in the Power Pack checkout: append the section
 below to `ukdl-universal.md` and commit it there. This worktree never writes to that checkout (orchestrator
 decision 5, D-11).

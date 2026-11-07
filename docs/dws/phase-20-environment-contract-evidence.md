@@ -139,7 +139,7 @@ process carries a HOME or userData under a p20 root. Witnesses before and after 
 `KNOWN_HOSTS_SHA` (kobii's real known_hosts), `ORCA_X_HEAD` f9a721fda, `REAL_RELAY_LISTING_SHA`
 absent. The disposable serve ran in its own session and was stopped by session (6 processes before,
 0 after); the real `~/.codex/hooks.json`, `~/.codex/config.toml` and `~/.claude/settings.json` keep
-mtimes older than the run. The GEX44 worktree `/home/kobii/orca-p20-20261001T231448Z` (fenced to
+mtimes older than the run. The GEX44 worktree `/home/<user>/orca-p20-20261001T231448Z` (fenced to
 01acd5e7c via `refs/heads/dws-p20-38e1ab4`) and the laptop worktree for the old relay are left
 registered.
 

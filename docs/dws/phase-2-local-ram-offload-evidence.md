@@ -33,8 +33,8 @@ by `pairingSha12` (first 12 hex characters of the SHA-256 of the pairing URL).
 | All three sites identical | yes |
 | Electron version | `43.1.0` (observed in the live process tree: `node_modules/.pnpm/electron@43.1.0/...`) |
 | systemd unit file SHA-256 (`/etc/systemd/system/orca-dws-serve.service` on GEX44) | `0eef36b97ca97d94cb7bfe64cfe60e2737ad6e5997d6a6ecc178dbd33c296deb` |
-| `/home/kobii/orca-x` HEAD before every publish in this plan | `f9a721fda491096b74f0115d78632356e526d096` |
-| `/home/kobii/orca-x` HEAD after every publish in this plan | `f9a721fda491096b74f0115d78632356e526d096` (unchanged) |
+| `/home/<user>/orca-x` HEAD before every publish in this plan | `f9a721fda491096b74f0115d78632356e526d096` |
+| `/home/<user>/orca-x` HEAD after every publish in this plan | `f9a721fda491096b74f0115d78632356e526d096` (unchanged) |
 | Sandbox mode | `no-sandbox` (accepted contingency, T-02-05: Chromium's setuid sandbox helper is incompatible with `NoNewPrivileges=yes`; residual accepted because the headless serve loads no untrusted web content and is loopback-only) |
 | `orca-svc` group membership (`id -nG orca-svc`) | `orca-svc` (own group only — no `sudo`, `adm`, or `kobii`) |
 | `systemctl is-active orca-dws-serve.service` (end of this plan) | `active` |
@@ -677,7 +677,7 @@ CLAUDE_CRED=0
 CODEX_CRED=0
 ```
 
-so Branch B applied (no redeploy, no agent sweep). No text was treated as an Owner reply. AGENT_LEG = BLOCKED: no provider login in the orca-svc service HOME; the classifier control above is the evidence of what the leg reports (`agentReply=not-logged-in`). Record: `docs/dws/phase-2-agent-leg.json`. Owner action (condensed): keep the tunnel `ssh -N -L 127.0.0.1:6791:127.0.0.1:6791 gex44`, fetch the pairing URL with `ssh gex44 'sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'`, pair the gex44-svc host in an Orca desktop with the SSH-tunnel box checked, open a terminal on that host, run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login`, finish, `/exit` (Codex: `/home/orca-svc/.orca-dws/agent-bin/codex login`). Never copy a credential file from another HOME.
+so Branch B applied (no redeploy, no agent sweep). No text was treated as an Owner reply. AGENT_LEG = BLOCKED: no provider login in the orca-svc service HOME; the classifier control above is the evidence of what the leg reports (`agentReply=not-logged-in`). Record: `docs/dws/phase-2-agent-leg.json`. Owner action (condensed): keep the tunnel `ssh -N -L 127.0.0.1:6791:127.0.0.1:6791 gex44`, fetch the pairing URL with `ssh gex44 'sudo bash /home/<user>/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'`, pair the gex44-svc host in an Orca desktop with the SSH-tunnel box checked, open a terminal on that host, run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login`, finish, `/exit` (Codex: `/home/orca-svc/.orca-dws/agent-bin/codex login`). Never copy a credential file from another HOME.
 
 ### Counted sweep note (offload-3d)
 
@@ -808,10 +808,10 @@ Superseded by this 02-08 continuation (offload-3d); the earlier lines are kept r
   measurement passes).
 - 02-08 update: MainPID is `1181474` (the serve was restarted between 02-06 and 02-08; same checkout `/home/orca-svc/dws-p2/b8e385a`, same artifact sha256 `4c094db99fe0480c6178fbbe835b2fd6d0913c3dd29728360960bc3eee890fc9`); it did not change across the three 02-08 launches. No redeploy was made by 02-08 (Branch B).
 - Service checkout: `/home/orca-svc/dws-p2/b8e385a` (unchanged by 02-08).
-- 02-08 placed the classifier control copy `/home/kobii/dws-agent-control-e8e24ec.mjs` and `/home/orca-svc/.orca-dws/dws-agent-control-e8e24ec.mjs` (sha256 `9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618`); left in place, disposable.
-- Build clone HEAD (`/home/kobii/dws-0104-clone`, used for dispatching `status`/provisioning
+- 02-08 placed the classifier control copy `/home/<user>/dws-agent-control-e8e24ec.mjs` and `/home/orca-svc/.orca-dws/dws-agent-control-e8e24ec.mjs` (sha256 `9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618`); left in place, disposable.
+- Build clone HEAD (`/home/<user>/dws-0104-clone`, used for dispatching `status`/provisioning
   commands): unchanged by this plan — never moved, per host_rules.
-- Tarballs, bundles and refs under `/home/kobii/orca-x`: unchanged by this plan.
+- Tarballs, bundles and refs under `/home/<user>/orca-x`: unchanged by this plan.
 - Tick-loop shells and idle terminal shells created by this plan's own dispatches were stopped and
   verified via a fresh `status`/`ps -u orca-svc` capture returning to the same 5 pre-existing
   (unrelated, prior-plan) `bash --rcfile` shells present before this plan started.

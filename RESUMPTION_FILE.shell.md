@@ -22,7 +22,7 @@ and shows the real estate (projects, running sessions) with Orca's own controls.
 - `d9ed840ad` dark-mode leg: root `color-scheme: dark` + list paints dark (luminance < 0.3)
 Coherence anchor: `git log --oneline a3445471e..HEAD` shows 16 commits, the last updating this
 file; last spec `d9ed840ad`.
-VERIFIED on GEX44 (`/home/kobii/cw-shell-wt`, node 24): tsc node/cli/web clean incl. uncached
+VERIFIED on GEX44 (`/home/<user>/cw-shell-wt`, node 24): tsc node/cli/web clean incl. uncached
 (`--composite false --incremental false`) and a planted-error control goes red; oxfmt --check
 clean; 8 affected vitest files 45/45; real-Electron `workspace-shell-reality.spec.ts` PASS at
 `d9ed840ad` (run5); screenshots read. `connected-application-studio` + `agent-federation-approval` PASS.
@@ -43,7 +43,7 @@ NOT A BRANCH DEFECT: `agent-chat-project-location` + `cognitive-workspace-surfac
 1. W-S is verified; the Owner decides push/merge. Nothing else is owed on this branch.
 2. Separate debt: why GEX44 reports `no-provider` with claude/codex in /usr/local/bin.
 3. Separate debt: `orca-restart.ts` dispose retries give up before Windows releases the profile.
-GEX44 run dirs: cw-shell-e2e-run{,2,3,4,5}; base A/B worktree `/home/kobii/cw-shell-base`.
+GEX44 run dirs: cw-shell-e2e-run{,2,3,4,5}; base A/B worktree `/home/<user>/cw-shell-base`.
 
 ## 5. Start
 Open Claude Code IN this worktree. Prove `git worktree list` + HEAD. Read Â§12 and this file.

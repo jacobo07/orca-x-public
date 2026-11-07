@@ -98,7 +98,7 @@ pattern. Every non-unknown verdict carries `os-probe` evidence, and every unknow
 ## Live read-only leg (measured, this laptop, 2026-10-28 12:06 local)
 
 The leg ran once with `ORCA_LIVE_OOB_PROBE=1` and `ORCA_LIVE_OOB_EVIDENCE` set to the job temp file
-`C:\Users\Jacobo\.claude\jobs\fd0cc958\tmp\20-02-live-oob-evidence.json`. Result: `Test Files  1 passed (1)`,
+`C:\Users\<owner>\.claude\jobs\fd0cc958\tmp\20-02-live-oob-evidence.json`. Result: `Test Files  1 passed (1)`,
 `Tests  1 passed (1)`, live_exit=0. The leg ran; it was not skipped. It made Get-CimInstance reads only. Nothing
 touched BIOS, power settings or Fast Startup, and nothing was elevated.
 
