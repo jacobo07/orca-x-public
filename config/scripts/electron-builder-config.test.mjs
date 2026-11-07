@@ -139,6 +139,25 @@ describe('electron-builder config', () => {
     )
   })
 
+  // Why: publish is null, so electron-builder writes no app-update.yml, and without one
+  // electron-updater's download fails ENOENT (measured on 1.4.179 -> 1.4.180).
+  it('ships a Windows updater manifest that follows the public feed and skips signing checks', async () => {
+    expect(electronBuilderConfig.win.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'resources/win32/app-update.yml', to: 'app-update.yml' })
+      ])
+    )
+    const manifest = await readFile(join(REPO_ROOT, 'resources', 'win32', 'app-update.yml'), 'utf8')
+    const channel = await readFile(join(REPO_ROOT, 'src', 'shared', 'release-channel.ts'), 'utf8')
+    const repo = /MAIN_RELEASE_REPO\s*=\s*'([^']+)'/.exec(channel)?.[1]
+    expect(repo).toBeTruthy()
+    expect(manifest).toMatch(/^provider: generic$/m)
+    expect(manifest).toContain(`url: https://github.com/${repo}/releases/latest/download`)
+    expect(manifest).toMatch(/^updaterCacheDirName: \S+$/m)
+    // An unsigned installer can never satisfy a publisherName check.
+    expect(manifest).not.toMatch(/publisherName/)
+  })
+
   // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
   // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
   it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {

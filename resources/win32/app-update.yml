@@ -1,0 +1,3 @@
+provider: generic
+url: https://github.com/jacobo07/orca-x-public/releases/latest/download
+updaterCacheDirName: orca-x-updater

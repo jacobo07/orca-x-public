@@ -352,6 +352,14 @@ module.exports = {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
       },
+      // Why a hand-written manifest: with publish: null electron-builder writes no app-update.yml,
+      // and electron-updater cannot download without one (it reads the cache dir name from it and
+      // fails ENOENT). It carries no publisherName on purpose: the fork's installers are unsigned,
+      // and a publisherName would make every update fail signature verification.
+      {
+        from: 'resources/win32/app-update.yml',
+        to: 'app-update.yml'
+      },
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
