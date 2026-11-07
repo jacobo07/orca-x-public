@@ -147,7 +147,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({ from: 'resources/win32/app-update.yml', to: 'app-update.yml' })
       ])
     )
-    const manifest = await readFile(join(REPO_ROOT, 'resources', 'win32', 'app-update.yml'), 'utf8')
+    // Why the normalisation: a Windows checkout may turn the manifest's line endings into CRLF.
+    const manifest = (
+      await readFile(join(REPO_ROOT, 'resources', 'win32', 'app-update.yml'), 'utf8')
+    ).replace(/\r\n/g, '\n')
     const channel = await readFile(join(REPO_ROOT, 'src', 'shared', 'release-channel.ts'), 'utf8')
     const repo = /MAIN_RELEASE_REPO\s*=\s*'([^']+)'/.exec(channel)?.[1]
     expect(repo).toBeTruthy()
