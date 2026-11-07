@@ -24,7 +24,11 @@ export const RELEASE_CHANNEL_LABELS: Readonly<Record<ReleaseChannel, string>> = 
 export const HOURLY_RELEASE_REPO = 'stablyai/orca-hourly'
 export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
 export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
-export const MAIN_RELEASE_REPO = 'stablyai/orca'
+/** Why the public copy and not stablyai/orca: upstream's feed serves upstream's app, so following it offers to replace
+ *  this fork with the product it forked from; and the fork's own repo is private, which an unauthenticated updater
+ *  cannot read. The public copy carries the fork with private infrastructure identifiers redacted. */
+export const MAIN_RELEASE_REPO = 'jacobo07/orca-x-public'
+export const MAIN_RELEASE_BASE_URL = `https://github.com/${MAIN_RELEASE_REPO}/releases`
 
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
